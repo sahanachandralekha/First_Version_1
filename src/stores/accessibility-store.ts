@@ -79,7 +79,7 @@ export const useAccessibilityStore = create<AccessibilityState>()(
       setINAISetting: (key, value) => set((state) => ({ inai: { ...state.inai, [key]: value } })),
       clearAnnouncement: () => set({ announcement: "" }),
     }),
-    { name: "inai-accessibility" },
+    { name: "inai-accessibility", skipHydration: true },
   ),
 );
 

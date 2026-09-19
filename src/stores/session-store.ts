@@ -21,4 +21,4 @@ export const useSessionStore = create<SessionState>()(persist((set) => ({
   setPermission: (name, value) => set((state) => ({ permissions: { ...state.permissions, [name]: value } })),
   setServiceHealth: (name, value) => set((state) => ({ serviceHealth: { ...state.serviceHealth, [name]: value } })),
   setDemoMode: (demoMode) => set({ demoMode }),
-}), { name: "inai-session" }));
+}), { name: "inai-session", skipHydration: true }));
