@@ -117,3 +117,29 @@ export const inaiChat = createServerFn({ method: "POST" })
     );
     return { reply: reply || "I'm here with you, but I couldn't work that out just now." };
   });
+
+/**
+ * 'describe-scene' — sends ONE camera frame to the model, only when the person
+ * asks for it, and gets back a real description of what is happening.
+ */
+export const describeScene = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    z.object({
+      image: z.string().startsWith("data:image/"),
+      profile: profileSchema,
+      question: z.string().max(300).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const text = await callGateway(
+      "You are INAI, describing a real photo to a person who may not be able to see or hear it. Say exactly what is happening in the scene: the place, the people and what they appear to be doing, objects and where they are relative to the viewer (left, ahead, right), any movement, text or signs you can read, and anything that could be a hazard. Never invent anything you cannot see. Distances are approximate. Speak in 2-4 warm, plain sentences, ending with the most useful next step if there is one.",
+      [{
+        role: "user",
+        content: [
+          { type: "input_text", text: data.question?.trim() || "Describe what is happening in front of me right now." },
+          { type: "input_image", image_url: data.image },
+        ],
+      }],
+    );
+    return { description: text || "I couldn't make out enough from that view. Let me try again in a moment." };
+  });
