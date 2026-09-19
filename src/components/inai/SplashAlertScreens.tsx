@@ -19,7 +19,7 @@ export function SplashScreen() {
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
-    void useAccessibilityStore.persist.rehydrate().then(() => {
+    void Promise.resolve(useAccessibilityStore.persist.rehydrate()).then(() => {
       timer = window.setTimeout(() => {
         if (!cancelled) void navigate({ to: useAccessibilityStore.getState().onboarded ? "/home" : "/onboarding/intro" });
       }, 2200);
