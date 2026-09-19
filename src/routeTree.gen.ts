@@ -23,10 +23,12 @@ import { Route as SplashRouteImport } from './routes/splash'
 import { Route as TranscribeRouteImport } from './routes/transcribe'
 import { Route as VisionRouteImport } from './routes/vision'
 import { Route as AlertIdRouteImport } from './routes/alert.$id'
+import { Route as CommunicateIndexRouteImport } from './routes/communicate.index'
 import { Route as CommunicateSignRouteImport } from './routes/communicate.sign'
 import { Route as OnboardingConfirmRouteImport } from './routes/onboarding.confirm'
 import { Route as OnboardingIntroRouteImport } from './routes/onboarding.intro'
 import { Route as OnboardingSetupRouteImport } from './routes/onboarding.setup'
+import { Route as SettingsIndexRouteImport } from './routes/settings.index'
 import { Route as SettingsPrivacyRouteImport } from './routes/settings.privacy'
 import { Route as VisionIndexRouteImport } from './routes/vision.index'
 import { Route as VisionLiveRouteImport } from './routes/vision.live'
@@ -101,6 +103,11 @@ const AlertIdRoute = AlertIdRouteImport.update({
   path: '/alert/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunicateIndexRoute = CommunicateIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => CommunicateRoute,
+} as any)
 const CommunicateSignRoute = CommunicateSignRouteImport.update({
   id: '/sign',
   path: '/sign',
@@ -120,6 +127,11 @@ const OnboardingSetupRoute = OnboardingSetupRouteImport.update({
   id: '/onboarding/setup',
   path: '/onboarding/setup',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsPrivacyRoute = SettingsPrivacyRouteImport.update({
   id: '/privacy',
@@ -158,18 +170,18 @@ export interface FileRoutesByFullPath {
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
+  '/communicate/': typeof CommunicateIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/vision/': typeof VisionIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/communicate': typeof CommunicateRouteWithChildren
   '/emergency': typeof EmergencyRoute
   '/guidance': typeof GuidanceRoute
   '/home': typeof HomeRoute
   '/inai': typeof InaiRoute
   '/map': typeof MapRoute
   '/profile': typeof ProfileRoute
-  '/settings': typeof SettingsRouteWithChildren
   '/sound': typeof SoundRoute
   '/splash': typeof SplashRoute
   '/transcribe': typeof TranscribeRoute
@@ -180,6 +192,8 @@ export interface FileRoutesByTo {
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
+  '/communicate': typeof CommunicateIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/vision': typeof VisionIndexRoute
 }
 export interface FileRoutesById {
@@ -204,6 +218,8 @@ export interface FileRoutesById {
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
+  '/communicate/': typeof CommunicateIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/vision/': typeof VisionIndexRoute
 }
 export interface FileRouteTypes {
@@ -229,18 +245,18 @@ export interface FileRouteTypes {
     | '/onboarding/setup'
     | '/settings/privacy'
     | '/vision/live'
+    | '/communicate/'
+    | '/settings/'
     | '/vision/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/communicate'
     | '/emergency'
     | '/guidance'
     | '/home'
     | '/inai'
     | '/map'
     | '/profile'
-    | '/settings'
     | '/sound'
     | '/splash'
     | '/transcribe'
@@ -251,6 +267,8 @@ export interface FileRouteTypes {
     | '/onboarding/setup'
     | '/settings/privacy'
     | '/vision/live'
+    | '/communicate'
+    | '/settings'
     | '/vision'
   id:
     | '__root__'
@@ -274,6 +292,8 @@ export interface FileRouteTypes {
     | '/onboarding/setup'
     | '/settings/privacy'
     | '/vision/live'
+    | '/communicate/'
+    | '/settings/'
     | '/vision/'
   fileRoutesById: FileRoutesById
 }
@@ -397,6 +417,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AlertIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/communicate/': {
+      id: '/communicate/'
+      path: '/'
+      fullPath: '/communicate/'
+      preLoaderRoute: typeof CommunicateIndexRouteImport
+      parentRoute: typeof CommunicateRoute
+    }
     '/communicate/sign': {
       id: '/communicate/sign'
       path: '/sign'
@@ -425,6 +452,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/settings/privacy': {
       id: '/settings/privacy'
       path: '/privacy'
@@ -451,10 +485,12 @@ declare module '@tanstack/react-router' {
 
 interface CommunicateRouteChildren {
   CommunicateSignRoute: typeof CommunicateSignRoute
+  CommunicateIndexRoute: typeof CommunicateIndexRoute
 }
 
 const CommunicateRouteChildren: CommunicateRouteChildren = {
   CommunicateSignRoute: CommunicateSignRoute,
+  CommunicateIndexRoute: CommunicateIndexRoute,
 }
 
 const CommunicateRouteWithChildren = CommunicateRoute._addFileChildren(
@@ -463,10 +499,12 @@ const CommunicateRouteWithChildren = CommunicateRoute._addFileChildren(
 
 interface SettingsRouteChildren {
   SettingsPrivacyRoute: typeof SettingsPrivacyRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsPrivacyRoute: SettingsPrivacyRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
 }
 
 const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
