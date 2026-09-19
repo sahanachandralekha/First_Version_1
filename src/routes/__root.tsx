@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import { AlertOverlayHost } from "@/components/inai/AlertOverlayHost";
 import { Toaster } from "@/components/ui/sonner";
 import { ensureAnonymousSession } from "@/lib/inai/session";
 import { startStoreSync } from "@/lib/inai/store-sync";
+import { DemoControls, stopActiveServices } from "@/components/inai/DemoControls";
 
 function NotFoundComponent() {
   return (
@@ -122,6 +124,7 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
     void useAccessibilityStore.persist.rehydrate();
@@ -129,13 +132,18 @@ function RootComponent() {
     void ensureAnonymousSession();
     startStoreSync();
     const applyAccessibilityPreferences = () => {
-      const { textSize, contrast } = useAccessibilityStore.getState().prefs;
+      const { textSize, contrast, reducedMotion } = useAccessibilityStore.getState().prefs;
       document.documentElement.dataset["textSize"] = textSize;
       document.documentElement.dataset["contrast"] = contrast;
+      document.documentElement.dataset["reducedMotion"] = String(reducedMotion);
     };
     applyAccessibilityPreferences();
     return useAccessibilityStore.subscribe(applyAccessibilityPreferences);
   }, []);
+
+  useEffect(() => {
+    stopActiveServices();
+  }, [pathname]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -144,6 +152,7 @@ function RootComponent() {
         <Outlet />
       </main>
       <AlertOverlayHost />
+      <DemoControls />
       <Toaster position="top-center" />
     </QueryClientProvider>
   );

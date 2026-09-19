@@ -147,9 +147,9 @@ export function CommunicateScreen() {
   return (
     <PageFrame nav>
       <ScreenHeader title="Communication Assistant" subtitle="Your voice, in every way." icon={MessageCircle} backTo="/home" />
-      <main className="relative flex-1 px-5 pb-6">
+      <div className="relative flex-1 px-5 pb-6">
         <ScriptNote className="right-4 top-1">Different Ways, Same Voice.</ScriptNote>
-        <h1 className="pt-2 text-3xl font-extrabold text-ink">Express Yourself</h1>
+        <h2 className="pt-2 text-3xl font-extrabold text-ink">Express Yourself</h2>
         <p className="mt-1 text-muted-foreground">Type, speak or use sign language. INAI will help you communicate.</p>
 
         <div className="mt-4 grid grid-cols-[1fr_9rem] items-start gap-2">
@@ -255,7 +255,7 @@ export function CommunicateScreen() {
           <Link to="/communicate/sign" className="flex min-h-12 items-center rounded-full border border-line px-4 py-3 font-semibold text-ink">View All</Link>
         </div>
         {toast && <div role="status" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-background shadow-inai">{toast}</div>}
-      </main>
+      </div>
     </PageFrame>
   );
 }
@@ -273,7 +273,7 @@ function StepThumb({ phrase, order, failed, onFail }: { phrase: SignPhrase; orde
     else { img.addEventListener("error", check); img.addEventListener("load", check); }
     return () => { img.removeEventListener("error", check); img.removeEventListener("load", check); };
   }, [onFail, phrase.id, order]);
-  if (failed || !step) return <HeartHandshake aria-hidden="true" className="mx-auto size-14 text-primary" />;
+  if (failed || !step?.assetUrl) return <HeartHandshake aria-hidden="true" className="mx-auto size-14 text-primary" />;
   return (
     <img
       ref={ref}
@@ -341,8 +341,8 @@ export function SignScreen() {
   return (
     <PageFrame nav>
       <ScreenHeader title="INAI Sign Communication" subtitle="Same Message. More Ways." icon={HeartHandshake} backTo="/communicate" />
-      <main className="flex-1 px-5 pb-6">
-        <h1 className="pt-2 text-3xl font-extrabold text-ink">Communication Without Limits</h1>
+      <div className="flex-1 px-5 pb-6">
+        <h2 className="pt-2 text-3xl font-extrabold text-ink">Communication Without Limits</h2>
 
         <div className="mt-3 flex items-start justify-between gap-3">
           <div className="flex-1 rounded-card border border-primary/10 bg-primary-tint p-4 shadow-inai">
@@ -453,7 +453,7 @@ export function SignScreen() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </PageFrame>
   );
 }
@@ -604,9 +604,9 @@ export function MapScreen() {
           </div>
         }
       />
-      <main className="flex-1 px-5 pb-6">
+      <div className="flex-1 px-5 pb-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold text-ink">Find Your Way</h1>
+          <h2 className="text-2xl font-extrabold text-ink">Find Your Way</h2>
           <span className="rounded-full border border-line px-3 py-1 text-xs font-bold text-muted-foreground">SKCET Campus</span>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">Discover nearby accessible places and get step-by-step guidance.</p>
@@ -711,7 +711,7 @@ export function MapScreen() {
           </div>
         )}
         {toast && <div role="status" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-background shadow-inai">{toast}</div>}
-      </main>
+      </div>
     </PageFrame>
   );
 }
@@ -801,12 +801,12 @@ export function EmergencyScreen() {
   return (
     <PageFrame nav>
       <ScreenHeader title="Emergency Mode" subtitle="You’re not alone. INAI is with you." icon={Siren} backTo="/home" />
-      <main className="flex-1 px-5 pb-6">
+      <div className="flex-1 px-5 pb-6">
         <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech-foreground">
           SIMULATED — this prototype does not contact real emergency services.
         </div>
 
-        <h1 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h1>
+        <h2 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h2>
         <p className="mt-1 text-sm text-muted-foreground">INAI will alert nearby support and keep guiding you.</p>
 
         <div className="mt-4 grid grid-cols-[1fr_8rem] items-center gap-2">
@@ -912,7 +912,7 @@ export function EmergencyScreen() {
           </Button>
         </div>
         {toast && <div role="status" className="fixed bottom-28 left-1/2 z-50 -translate-x-1/2 rounded-full bg-ink px-5 py-3 text-sm font-bold text-background shadow-inai">{toast}</div>}
-      </main>
+      </div>
     </PageFrame>
   );
 }
@@ -958,8 +958,8 @@ export function PrivacyScreen() {
   return (
     <PageFrame>
       <ScreenHeader title="Privacy & Data" subtitle="You stay in control." icon={ShieldAlert} backTo="/settings" />
-      <main className="flex-1 px-5 pb-6">
-        <h1 className="pt-2 text-2xl font-extrabold text-ink">Privacy &amp; Data</h1>
+      <div className="flex-1 px-5 pb-6">
+        <h2 className="pt-2 text-2xl font-extrabold text-ink">Privacy &amp; Data</h2>
         <p className="mt-1 text-sm text-muted-foreground">Plain words about what happens to your information.</p>
         <div className="mt-4 space-y-3">
           {PRIVACY_SECTIONS.map(({ icon: Icon, title, body }) => (
@@ -989,7 +989,7 @@ export function PrivacyScreen() {
           </div>
         )}
         {footer}
-      </main>
+      </div>
     </PageFrame>
   );
 }

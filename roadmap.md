@@ -31,13 +31,21 @@
 - [x] Verify Stage 2 routes, keyboard behavior, live adaptation, cloud reads/writes, mobile layout, and preview health.
 
 ## Stage 5 of 5 — POLISH, AUDIT AND DEMO READINESS
-- [ ] Unify every active INAI appearance through INAIAvatar and document the pose used on each screen.
-- [ ] Consolidate headers, status indicators, controls, spacing, colors, typography, captions, and motion behavior.
-- [ ] Fix accessibility findings across landmarks, headings, labels, focus, targets, contrast, text scaling, reduced motion, and sign descriptions.
-- [ ] Verify responsive layouts at 320, 360, 390, and 430 px, tablet, desktop, and camera landscape.
-- [ ] Finish performance cleanup for lazy loading, asset preloading, route cleanup, media release, TTS cancellation, and hidden loops.
-- [ ] Complete loading, empty, error, permission-denied, degraded, and activating states across active screens.
-- [ ] Complete honesty labels and the real/mock/future disclosure.
-- [ ] Verify all routes, seven profile combinations, adaptive navigation/dashboard behavior, alerts, persistence, and media cleanup.
-- [ ] Finish Settings-gated Demo Mode with sequence, manual recovery triggers, reset, and visible demo controls.
-- [ ] Replace the generic README with the one-page INAI architecture and service-mode guide.
+- [x] Unify every active INAI appearance through INAIAvatar and document the pose used on each screen.
+- [x] Consolidate headers, status indicators, controls, spacing, colors, typography, captions, and motion behavior.
+- [x] Fix accessibility findings across landmarks, headings, labels, focus, targets, contrast, text scaling, reduced motion, and sign descriptions.
+- [x] Verify responsive layouts at 320, 360, 390, and 430 px, tablet, desktop, and camera landscape.
+- [x] Finish performance cleanup for lazy loading, asset preloading, route cleanup, media release, TTS cancellation, and hidden loops.
+- [x] Complete loading, empty, error, permission-denied, degraded, and activating states across active screens.
+- [x] Complete honesty labels and the real/mock/future disclosure.
+- [x] Verify all routes, seven profile combinations, adaptive navigation/dashboard behavior, alerts, persistence, and media cleanup.
+- [x] Finish Settings-gated Demo Mode with sequence, manual recovery triggers, reset, and visible demo controls.
+- [x] Replace the generic README with the one-page INAI architecture and service-mode guide.
+
+### Final verification record
+- TypeScript validation passes with no errors.
+- All 18 product routes have exactly one main landmark and one page heading.
+- The 320, 360, 390, 430, tablet, and desktop viewport matrix has no horizontal overflow.
+- Demo Mode is off by default and its Settings toggle reveals the floating recovery controls.
+- Sign steps retain validated text descriptions when optional visual assets are unavailable.
+- Active screens contain no direct avatar-driver or one-off character imports.

@@ -26,7 +26,7 @@ export function ScreenHeader({ title, subtitle, icon: Icon = Sparkles, backTo = 
       <div className="flex min-w-0 items-center justify-center gap-3">
         <span className="grid size-11 shrink-0 place-items-center rounded-full bg-primary-tint text-primary"><Icon /></span>
         <div className="min-w-0 text-center">
-          <p className="truncate text-lg font-extrabold text-ink">{title}</p>
+          <h1 className="truncate text-lg font-extrabold text-ink">{title}</h1>
           <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
       </div>

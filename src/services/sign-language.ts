@@ -1,6 +1,6 @@
 import type { ServiceDescriptor } from "./types";
 
-export interface SignStep { order: number; gloss: string; description: string; assetUrl: string; durationMs: number }
+export interface SignStep { order: number; gloss: string; description: string; assetUrl?: string; durationMs: number }
 export interface SignPhrase {
   id: string; language: "ISL"; text: string; category: string; steps: SignStep[];
   validation: { status: "validated" | "unvalidated" | "pending-review"; source?: string; reviewedBy?: string; reviewedAt?: string };
@@ -51,7 +51,6 @@ export const signPhrases: SignPhrase[] = seeds.map(([id, text, category, steps])
   id, text, category, language: "ISL",
   steps: steps.map(([gloss, description], index) => ({
     order: index + 1, gloss, description,
-    assetUrl: `/inai/signs/${id}/${index + 1}.png`,
     durationMs: 900,
   })),
   validation: { status: "validated", source: SIGN_SOURCE },

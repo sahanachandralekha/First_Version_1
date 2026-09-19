@@ -58,6 +58,7 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
   private stream: MediaStream | undefined;
   private model: undefined | { detect(input: HTMLVideoElement): Promise<Array<{ class: string; score: number; bbox: [number, number, number, number] }>> };
   private timer: number | undefined;
+  private detecting = false;
   private detectionListeners = new Set<DetectionListener>();
   private statusListeners = new Set<StatusListener>();
   status: VisionStatus = "idle";
@@ -79,7 +80,8 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
   }
 
   private async tick(video: HTMLVideoElement) {
-    if (!this.model || video.readyState < 2) return;
+    if (!this.model || video.readyState < 2 || this.detecting || document.visibilityState === "hidden") return;
+    this.detecting = true;
     const frame = { width: video.videoWidth || video.clientWidth, height: video.videoHeight || video.clientHeight };
     const raw = await this.model.detect(video).catch(() => []);
     const detections: VisionDetection[] = raw
@@ -99,6 +101,7 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
     this.detectionListeners.forEach((listener) => listener(all));
     const nearest = detections.filter((d) => d.hazard).sort((a, b) => a.approxDistance - b.approxDistance)[0];
     if (nearest) eventBus.emit(this.toEvent(nearest));
+    this.detecting = false;
   }
 
   private toEvent(detection: VisionDetection): NormalizedEvent {
@@ -118,6 +121,7 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = undefined;
     this.model = undefined;
+    this.detecting = false;
     this.setStatus("idle");
   }
 }

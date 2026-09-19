@@ -17,7 +17,7 @@ export function DetectionOverlay({ detections, frame }: { detections: VisionDete
       {detections.filter((d) => d.rawClass !== "pathway").map((detection) => (
         <span
           key={detection.id}
-          className={`absolute rounded-control border-[3px] ${toneClass[detection.tone]}`}
+          className={`detection-overlay absolute rounded-control border-[3px] ${toneClass[detection.tone]}`}
           style={{
             left: `${(detection.box.x / frame.width) * 100}%`,
             top: `${(detection.box.y / frame.height) * 100}%`,
@@ -87,8 +87,8 @@ export function CameraStage({
       )}
       {showControls && !failed && (
         <>
-          <button type="button" className="absolute bottom-3 left-3 min-h-10 rounded-full bg-background/90 px-3 text-sm font-extrabold">1x</button>
-          <button type="button" aria-label="Fullscreen" className="absolute bottom-3 right-3 grid size-10 place-items-center rounded-full bg-background/90">
+          <button type="button" className="absolute bottom-3 left-3 min-h-12 min-w-12 rounded-full bg-background/90 px-3 text-sm font-extrabold">1x</button>
+          <button type="button" aria-label="Fullscreen" className="absolute bottom-3 right-3 grid size-12 place-items-center rounded-full bg-background/90">
             <Maximize2 className="size-4" />
           </button>
         </>

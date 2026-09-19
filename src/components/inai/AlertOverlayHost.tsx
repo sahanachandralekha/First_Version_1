@@ -34,6 +34,7 @@ export function AlertOverlayHost() {
   const setContext = useContextStore((s) => s.setContext);
   const hapticEnabled = useAccessibilityStore((s) => s.prefs.hapticEnabled);
   const voiceEnabled = useAccessibilityStore((s) => s.prefs.voiceEnabled);
+  const reducedMotion = useAccessibilityStore((s) => s.prefs.reducedMotion);
   const active = alertLevel === "critical";
 
   const headline = (directive?.message ?? lastGuidance ?? "").toUpperCase() || "IMPORTANT ALERT NEARBY";
@@ -64,8 +65,9 @@ export function AlertOverlayHost() {
       role="alertdialog"
       aria-modal="true"
       aria-label="Urgent alert from INAI"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, x: 0 }}
+      animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, x: [0, -3, 3, -3, 0] }}
+      transition={{ duration: reducedMotion ? 0 : 0.22, ease: "easeOut" }}
       className="fixed inset-0 z-[90] flex flex-col overflow-y-auto bg-destructive text-destructive-foreground"
     >
       <p aria-live="assertive" className="sr-only">{`Warning. ${headline}. ${source}. Maintain distance.`}</p>
@@ -73,8 +75,7 @@ export function AlertOverlayHost() {
       <div className="flex flex-1 flex-col items-center gap-4 px-6 pb-4 pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
         <motion.span
           className="grid size-20 place-items-center rounded-full bg-destructive-foreground/15"
-          animate={{ scale: [1, 1.12, 1] }}
-          transition={{ duration: 1.1, repeat: Infinity }}
+          {...(reducedMotion ? {} : { animate: { scale: [1, 1.08, 1] }, transition: { duration: 1.1, repeat: Infinity } })}
           aria-hidden="true"
         >
           <AlertTriangle className="size-12" />
