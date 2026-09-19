@@ -27,6 +27,7 @@ import { Route as CommunicateSignRouteImport } from './routes/communicate.sign'
 import { Route as OnboardingConfirmRouteImport } from './routes/onboarding.confirm'
 import { Route as OnboardingIntroRouteImport } from './routes/onboarding.intro'
 import { Route as OnboardingSetupRouteImport } from './routes/onboarding.setup'
+import { Route as SettingsPrivacyRouteImport } from './routes/settings.privacy'
 import { Route as VisionIndexRouteImport } from './routes/vision.index'
 import { Route as VisionLiveRouteImport } from './routes/vision.live'
 
@@ -120,6 +121,11 @@ const OnboardingSetupRoute = OnboardingSetupRouteImport.update({
   path: '/onboarding/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsPrivacyRoute = SettingsPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const VisionIndexRoute = VisionIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -140,7 +146,7 @@ export interface FileRoutesByFullPath {
   '/inai': typeof InaiRoute
   '/map': typeof MapRoute
   '/profile': typeof ProfileRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sound': typeof SoundRoute
   '/splash': typeof SplashRoute
   '/transcribe': typeof TranscribeRoute
@@ -150,6 +156,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/confirm': typeof OnboardingConfirmRoute
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
+  '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
   '/vision/': typeof VisionIndexRoute
 }
@@ -162,7 +169,7 @@ export interface FileRoutesByTo {
   '/inai': typeof InaiRoute
   '/map': typeof MapRoute
   '/profile': typeof ProfileRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sound': typeof SoundRoute
   '/splash': typeof SplashRoute
   '/transcribe': typeof TranscribeRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/onboarding/confirm': typeof OnboardingConfirmRoute
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
+  '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
   '/vision': typeof VisionIndexRoute
 }
@@ -184,7 +192,7 @@ export interface FileRoutesById {
   '/inai': typeof InaiRoute
   '/map': typeof MapRoute
   '/profile': typeof ProfileRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/sound': typeof SoundRoute
   '/splash': typeof SplashRoute
   '/transcribe': typeof TranscribeRoute
@@ -194,6 +202,7 @@ export interface FileRoutesById {
   '/onboarding/confirm': typeof OnboardingConfirmRoute
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
+  '/settings/privacy': typeof SettingsPrivacyRoute
   '/vision/live': typeof VisionLiveRoute
   '/vision/': typeof VisionIndexRoute
 }
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/onboarding/confirm'
     | '/onboarding/intro'
     | '/onboarding/setup'
+    | '/settings/privacy'
     | '/vision/live'
     | '/vision/'
   fileRoutesByTo: FileRoutesByTo
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/onboarding/confirm'
     | '/onboarding/intro'
     | '/onboarding/setup'
+    | '/settings/privacy'
     | '/vision/live'
     | '/vision'
   id:
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/onboarding/confirm'
     | '/onboarding/intro'
     | '/onboarding/setup'
+    | '/settings/privacy'
     | '/vision/live'
     | '/vision/'
   fileRoutesById: FileRoutesById
@@ -274,7 +286,7 @@ export interface RootRouteChildren {
   InaiRoute: typeof InaiRoute
   MapRoute: typeof MapRoute
   ProfileRoute: typeof ProfileRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SoundRoute: typeof SoundRoute
   SplashRoute: typeof SplashRoute
   TranscribeRoute: typeof TranscribeRoute
@@ -413,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/privacy': {
+      id: '/settings/privacy'
+      path: '/privacy'
+      fullPath: '/settings/privacy'
+      preLoaderRoute: typeof SettingsPrivacyRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/vision/': {
       id: '/vision/'
       path: '/'
@@ -442,6 +461,18 @@ const CommunicateRouteWithChildren = CommunicateRoute._addFileChildren(
   CommunicateRouteChildren,
 )
 
+interface SettingsRouteChildren {
+  SettingsPrivacyRoute: typeof SettingsPrivacyRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsPrivacyRoute: SettingsPrivacyRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface VisionRouteChildren {
   VisionLiveRoute: typeof VisionLiveRoute
   VisionIndexRoute: typeof VisionIndexRoute
@@ -464,7 +495,7 @@ const rootRouteChildren: RootRouteChildren = {
   InaiRoute: InaiRoute,
   MapRoute: MapRoute,
   ProfileRoute: ProfileRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SoundRoute: SoundRoute,
   SplashRoute: SplashRoute,
   TranscribeRoute: TranscribeRoute,
