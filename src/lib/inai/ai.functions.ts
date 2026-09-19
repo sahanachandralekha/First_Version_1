@@ -79,35 +79,10 @@ export const understandScene = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const fallback = { summary: "", priority: "info", guidance: "", hazards: [] as string[] };
-    // Sort nearest-first so the model weighs what matters most, and keep confidence so it can discount shaky reads.
-    const sorted = [...data.detections].sort((a, b) => (a.approxDistance ?? 99) - (b.approxDistance ?? 99));
-    const listed = sorted
-      .map((d) => {
-        const bits = [d.label];
-        if (d.approxDistance) bits.push(`about ${Math.round(d.approxDistance)} m away`);
-        if (d.confidence !== undefined && d.confidence < 0.7) bits.push("uncertain detection");
-        return bits.join(", ");
-      })
-      .join("; ") || "nothing recognised";
-    const needs = [
-      data.profile.visual && "limited vision (describe positions and obstacles concretely)",
-      data.profile.hearing && "limited hearing (they cannot hear approaching vehicles or warnings)",
-      data.profile.speech && "limited speech (keep guidance answerable without speaking)",
-    ].filter(Boolean).join("; ") || "no specific limitation given";
+    const listed = data.detections.map((d) => `${d.label}${d.approxDistance ? ` ~${Math.round(d.approxDistance)} m` : ""}`).join(", ") || "nothing recognised";
     const raw = await callGateway(
-      `You are the situational-awareness core of INAI, an accessibility companion. You receive on-device object detections from the person's camera and turn them into a short, truthful read of the scene.
-
-Rules:
-- Say what the scene IS (a corridor, a road crossing, a crowded room) only when the detections genuinely imply it; otherwise say what is there without naming a place.
-- Anchor everything spatially: near/far, and left/ahead/right only if the list gives positions — never guess positions.
-- Priority: the nearest moving thing that could affect the person (vehicle, bicycle, person approaching) decides "warn"/"critical"; "warn" only when something is within roughly 4 m, "critical" within roughly 2 m. Static furniture or distant people are "info"/"notice".
-- Guidance must be one concrete physical action ("pause and hold the rail", "step left toward the open floor"), never vague advice like "be careful" or "stay alert".
-- If previous guidance is given, do not repeat it unless nothing changed; say what changed instead.
-- Distances are always approximate. Never invent objects, movement, exits, or signs that are not in the list.
-- Adapt wording to the person's needs listed below.
-
-Reply ONLY with JSON: {"summary":string,"priority":"info"|"notice"|"warn"|"critical","guidance":string,"hazards":string[]}. summary describes what is happening right now (under 30 words, spoken language, no object-list recital); guidance is the single most useful next action (under 20 words); hazards lists only the detections that genuinely threaten safety.`,
-      `Detections (nearest first): ${listed}\nPerson's needs: ${needs}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
+      "You help a person with visual, hearing or speech accessibility needs understand what is happening around them right now. Say what the scene actually is and what is going on in it — not just a list of objects: where things are (left, ahead, right), whether anything is moving toward the person, and what that means for their next step. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. summary describes what is happening (under 30 words); guidance is the single most useful next action (under 20 words). Warm, plain, spoken language.",
+      `Detections: ${listed}\nProfile: visual=${data.profile.visual}, hearing=${data.profile.hearing}, speech=${data.profile.speech}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
     );
     return parseJson(raw, fallback);
   });
@@ -134,21 +109,10 @@ export const inaiChat = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const context = `What INAI's own sensors report right now — seen: ${data.world.detections.join(", ") || "nothing detected"}; heard: ${data.world.sounds.join(", ") || "nothing detected"}; last speech heard: ${data.world.transcript || "none"}.`;
+    const context = `Around the person right now — seen: ${data.world.detections.join(", ") || "nothing"}; heard: ${data.world.sounds.join(", ") || "nothing"}; last speech heard: ${data.world.transcript || "none"}.`;
     const history = data.history.map((m) => `${m.role === "user" ? "Person" : "INAI"}: ${m.content}`).join("\n");
-    const needs = [
-      data.profile.visual && "limited vision",
-      data.profile.hearing && "limited hearing",
-      data.profile.speech && "limited speech",
-    ].filter(Boolean).join(", ") || "not specified";
     const reply = await callGateway(
-      `You are INAI, a warm accessibility companion speaking to a person with ${needs}.
-
-Grounding rules:
-- Answer using the sensor context below when the question is about their surroundings ("what's around me", "is anything coming", "what did they say"). Quote what was actually seen or heard, with approximate distances.
-- If the sensor context does not contain the answer, say so plainly ("I can't see that from here") and suggest the concrete thing they can do (point the camera, tap Describe this scene) — never fill the gap with a plausible-sounding guess.
-- Answer general questions (what is sign language, how do I change a setting) helpfully from your own knowledge, and keep them clearly separate from what the sensors report.
-- At most three short sentences. Plain, warm, spoken language — never clinical. Distances are always approximate. Never claim to contact emergency services or anyone else.`,
+      "You are INAI, a warm accessibility companion. Answer in at most three short sentences, plain language, never clinical. Distances are always approximate. Never claim to contact emergency services. Do not invent things that were not seen or heard.",
       `${context}\n${history}\nPerson: ${data.message}`,
     );
     return { reply: reply || "I'm here with you, but I couldn't work that out just now." };
@@ -167,21 +131,8 @@ export const describeScene = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const needs = [
-      data.profile.visual && "cannot see the scene",
-      data.profile.hearing && "cannot hear the scene",
-    ].filter(Boolean).join(" and ") || "may not perceive the scene fully";
     const text = await callGateway(
-      `You are INAI, describing one live camera frame to a person who ${needs}. This photo is their only window right now, so precision matters more than pleasantries.
-
-Describe in this order:
-1. The setting and overall activity in one clause (name the place type only if it is visually obvious).
-2. Whatever is closest and most relevant to the person's body — obstacles, people, vehicles — with position (left, ahead, right) and approximate distance.
-3. Anything that could hurt them or block their path, if present.
-4. Readable text, signs, or door labels, quoted exactly.
-5. The single most useful next step, only if one clearly follows from the scene.
-
-Rules: 2-4 warm, plain sentences total. Report only what is actually visible — if part of the frame is blurry or dark, say so rather than guessing. If the person asked a specific question, answer that question first using the image, then add safety-relevant details. Distances are always approximate.`,
+      "You are INAI, describing a real photo to a person who may not be able to see or hear it. Say exactly what is happening in the scene: the place, the people and what they appear to be doing, objects and where they are relative to the viewer (left, ahead, right), any movement, text or signs you can read, and anything that could be a hazard. Never invent anything you cannot see. Distances are approximate. Speak in 2-4 warm, plain sentences, ending with the most useful next step if there is one.",
       [{
         role: "user",
         content: [
