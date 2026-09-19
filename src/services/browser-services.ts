@@ -3,7 +3,7 @@ import type { AccessiblePlace, EmergencyService, HapticService, LocationService,
 export class BrowserVisionService implements VisionService {
   readonly name = "Vision"; readonly mode = "REAL" as const;
   readonly description = "Camera access with local object detection.";
-  private stream?: MediaStream;
+  private stream: MediaStream | undefined;
   async start(video: HTMLVideoElement) {
     this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     video.srcObject = this.stream; await video.play();

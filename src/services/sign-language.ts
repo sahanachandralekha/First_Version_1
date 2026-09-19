@@ -10,7 +10,7 @@ export const signPhrases: SignPhrase[] = [
   ["restroom", "Where is the restroom?", "places"], ["dont_understand", "I don't understand", "conversation"],
   ["please_repeat", "Please repeat that", "conversation"], ["thank_you", "Thank you", "courtesy"],
   ["im_okay", "I'm okay", "safety"], ["please_be_patient", "Please be patient", "conversation"],
-].map(([id, text, category]) => ({ id, text, category, language: "ISL", steps: [], validation: { status: "unvalidated", source } }));
+] satisfies Array<[string, string, string]>).map(([id, text, category]) => ({ id, text, category, language: "ISL", steps: [], validation: { status: "unvalidated", source } }));
 export interface SignService extends ServiceDescriptor { get(id: string): SignPhrase | null; demoPhrases(): SignPhrase[] }
 export class RegistrySignService implements SignService {
   readonly name = "ISL phrase playback"; readonly mode = "REAL" as const;
