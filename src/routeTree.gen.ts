@@ -10,33 +10,269 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CommunicateRouteImport } from './routes/communicate'
+import { Route as EmergencyRouteImport } from './routes/emergency'
+import { Route as GuidanceRouteImport } from './routes/guidance'
+import { Route as HomeRouteImport } from './routes/home'
+import { Route as InaiRouteImport } from './routes/inai'
+import { Route as MapRouteImport } from './routes/map'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SoundRouteImport } from './routes/sound'
+import { Route as SplashRouteImport } from './routes/splash'
+import { Route as TranscribeRouteImport } from './routes/transcribe'
+import { Route as VisionRouteImport } from './routes/vision'
+import { Route as AlertIdRouteImport } from './routes/alert.$id'
+import { Route as CommunicateSignRouteImport } from './routes/communicate.sign'
+import { Route as OnboardingConfirmRouteImport } from './routes/onboarding.confirm'
+import { Route as OnboardingIntroRouteImport } from './routes/onboarding.intro'
+import { Route as OnboardingSetupRouteImport } from './routes/onboarding.setup'
+import { Route as VisionLiveRouteImport } from './routes/vision.live'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommunicateRoute = CommunicateRouteImport.update({
+  id: '/communicate',
+  path: '/communicate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmergencyRoute = EmergencyRouteImport.update({
+  id: '/emergency',
+  path: '/emergency',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuidanceRoute = GuidanceRouteImport.update({
+  id: '/guidance',
+  path: '/guidance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InaiRoute = InaiRouteImport.update({
+  id: '/inai',
+  path: '/inai',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SoundRoute = SoundRouteImport.update({
+  id: '/sound',
+  path: '/sound',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplashRoute = SplashRouteImport.update({
+  id: '/splash',
+  path: '/splash',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TranscribeRoute = TranscribeRouteImport.update({
+  id: '/transcribe',
+  path: '/transcribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VisionRoute = VisionRouteImport.update({
+  id: '/vision',
+  path: '/vision',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlertIdRoute = AlertIdRouteImport.update({
+  id: '/alert/$id',
+  path: '/alert/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CommunicateSignRoute = CommunicateSignRouteImport.update({
+  id: '/sign',
+  path: '/sign',
+  getParentRoute: () => CommunicateRoute,
+} as any)
+const OnboardingConfirmRoute = OnboardingConfirmRouteImport.update({
+  id: '/onboarding/confirm',
+  path: '/onboarding/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingIntroRoute = OnboardingIntroRouteImport.update({
+  id: '/onboarding/intro',
+  path: '/onboarding/intro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingSetupRoute = OnboardingSetupRouteImport.update({
+  id: '/onboarding/setup',
+  path: '/onboarding/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VisionLiveRoute = VisionLiveRouteImport.update({
+  id: '/live',
+  path: '/live',
+  getParentRoute: () => VisionRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/communicate': typeof CommunicateRouteWithChildren
+  '/emergency': typeof EmergencyRoute
+  '/guidance': typeof GuidanceRoute
+  '/home': typeof HomeRoute
+  '/inai': typeof InaiRoute
+  '/map': typeof MapRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/sound': typeof SoundRoute
+  '/splash': typeof SplashRoute
+  '/transcribe': typeof TranscribeRoute
+  '/vision': typeof VisionRouteWithChildren
+  '/alert/$id': typeof AlertIdRoute
+  '/communicate/sign': typeof CommunicateSignRoute
+  '/onboarding/confirm': typeof OnboardingConfirmRoute
+  '/onboarding/intro': typeof OnboardingIntroRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
+  '/vision/live': typeof VisionLiveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/communicate': typeof CommunicateRouteWithChildren
+  '/emergency': typeof EmergencyRoute
+  '/guidance': typeof GuidanceRoute
+  '/home': typeof HomeRoute
+  '/inai': typeof InaiRoute
+  '/map': typeof MapRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/sound': typeof SoundRoute
+  '/splash': typeof SplashRoute
+  '/transcribe': typeof TranscribeRoute
+  '/vision': typeof VisionRouteWithChildren
+  '/alert/$id': typeof AlertIdRoute
+  '/communicate/sign': typeof CommunicateSignRoute
+  '/onboarding/confirm': typeof OnboardingConfirmRoute
+  '/onboarding/intro': typeof OnboardingIntroRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
+  '/vision/live': typeof VisionLiveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/communicate': typeof CommunicateRouteWithChildren
+  '/emergency': typeof EmergencyRoute
+  '/guidance': typeof GuidanceRoute
+  '/home': typeof HomeRoute
+  '/inai': typeof InaiRoute
+  '/map': typeof MapRoute
+  '/profile': typeof ProfileRoute
+  '/settings': typeof SettingsRoute
+  '/sound': typeof SoundRoute
+  '/splash': typeof SplashRoute
+  '/transcribe': typeof TranscribeRoute
+  '/vision': typeof VisionRouteWithChildren
+  '/alert/$id': typeof AlertIdRoute
+  '/communicate/sign': typeof CommunicateSignRoute
+  '/onboarding/confirm': typeof OnboardingConfirmRoute
+  '/onboarding/intro': typeof OnboardingIntroRoute
+  '/onboarding/setup': typeof OnboardingSetupRoute
+  '/vision/live': typeof VisionLiveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/communicate'
+    | '/emergency'
+    | '/guidance'
+    | '/home'
+    | '/inai'
+    | '/map'
+    | '/profile'
+    | '/settings'
+    | '/sound'
+    | '/splash'
+    | '/transcribe'
+    | '/vision'
+    | '/alert/$id'
+    | '/communicate/sign'
+    | '/onboarding/confirm'
+    | '/onboarding/intro'
+    | '/onboarding/setup'
+    | '/vision/live'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/communicate'
+    | '/emergency'
+    | '/guidance'
+    | '/home'
+    | '/inai'
+    | '/map'
+    | '/profile'
+    | '/settings'
+    | '/sound'
+    | '/splash'
+    | '/transcribe'
+    | '/vision'
+    | '/alert/$id'
+    | '/communicate/sign'
+    | '/onboarding/confirm'
+    | '/onboarding/intro'
+    | '/onboarding/setup'
+    | '/vision/live'
+  id:
+    | '__root__'
+    | '/'
+    | '/communicate'
+    | '/emergency'
+    | '/guidance'
+    | '/home'
+    | '/inai'
+    | '/map'
+    | '/profile'
+    | '/settings'
+    | '/sound'
+    | '/splash'
+    | '/transcribe'
+    | '/vision'
+    | '/alert/$id'
+    | '/communicate/sign'
+    | '/onboarding/confirm'
+    | '/onboarding/intro'
+    | '/onboarding/setup'
+    | '/vision/live'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CommunicateRoute: typeof CommunicateRouteWithChildren
+  EmergencyRoute: typeof EmergencyRoute
+  GuidanceRoute: typeof GuidanceRoute
+  HomeRoute: typeof HomeRoute
+  InaiRoute: typeof InaiRoute
+  MapRoute: typeof MapRoute
+  ProfileRoute: typeof ProfileRoute
+  SettingsRoute: typeof SettingsRoute
+  SoundRoute: typeof SoundRoute
+  SplashRoute: typeof SplashRoute
+  TranscribeRoute: typeof TranscribeRoute
+  VisionRoute: typeof VisionRouteWithChildren
+  AlertIdRoute: typeof AlertIdRoute
+  OnboardingConfirmRoute: typeof OnboardingConfirmRoute
+  OnboardingIntroRoute: typeof OnboardingIntroRoute
+  OnboardingSetupRoute: typeof OnboardingSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +284,176 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/communicate': {
+      id: '/communicate'
+      path: '/communicate'
+      fullPath: '/communicate'
+      preLoaderRoute: typeof CommunicateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emergency': {
+      id: '/emergency'
+      path: '/emergency'
+      fullPath: '/emergency'
+      preLoaderRoute: typeof EmergencyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guidance': {
+      id: '/guidance'
+      path: '/guidance'
+      fullPath: '/guidance'
+      preLoaderRoute: typeof GuidanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inai': {
+      id: '/inai'
+      path: '/inai'
+      fullPath: '/inai'
+      preLoaderRoute: typeof InaiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sound': {
+      id: '/sound'
+      path: '/sound'
+      fullPath: '/sound'
+      preLoaderRoute: typeof SoundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/splash': {
+      id: '/splash'
+      path: '/splash'
+      fullPath: '/splash'
+      preLoaderRoute: typeof SplashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/transcribe': {
+      id: '/transcribe'
+      path: '/transcribe'
+      fullPath: '/transcribe'
+      preLoaderRoute: typeof TranscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vision': {
+      id: '/vision'
+      path: '/vision'
+      fullPath: '/vision'
+      preLoaderRoute: typeof VisionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/alert/$id': {
+      id: '/alert/$id'
+      path: '/alert/$id'
+      fullPath: '/alert/$id'
+      preLoaderRoute: typeof AlertIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/communicate/sign': {
+      id: '/communicate/sign'
+      path: '/sign'
+      fullPath: '/communicate/sign'
+      preLoaderRoute: typeof CommunicateSignRouteImport
+      parentRoute: typeof CommunicateRoute
+    }
+    '/onboarding/confirm': {
+      id: '/onboarding/confirm'
+      path: '/onboarding/confirm'
+      fullPath: '/onboarding/confirm'
+      preLoaderRoute: typeof OnboardingConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding/intro': {
+      id: '/onboarding/intro'
+      path: '/onboarding/intro'
+      fullPath: '/onboarding/intro'
+      preLoaderRoute: typeof OnboardingIntroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding/setup': {
+      id: '/onboarding/setup'
+      path: '/onboarding/setup'
+      fullPath: '/onboarding/setup'
+      preLoaderRoute: typeof OnboardingSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vision/live': {
+      id: '/vision/live'
+      path: '/live'
+      fullPath: '/vision/live'
+      preLoaderRoute: typeof VisionLiveRouteImport
+      parentRoute: typeof VisionRoute
+    }
   }
 }
 
+interface CommunicateRouteChildren {
+  CommunicateSignRoute: typeof CommunicateSignRoute
+}
+
+const CommunicateRouteChildren: CommunicateRouteChildren = {
+  CommunicateSignRoute: CommunicateSignRoute,
+}
+
+const CommunicateRouteWithChildren = CommunicateRoute._addFileChildren(
+  CommunicateRouteChildren,
+)
+
+interface VisionRouteChildren {
+  VisionLiveRoute: typeof VisionLiveRoute
+}
+
+const VisionRouteChildren: VisionRouteChildren = {
+  VisionLiveRoute: VisionLiveRoute,
+}
+
+const VisionRouteWithChildren =
+  VisionRoute._addFileChildren(VisionRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CommunicateRoute: CommunicateRouteWithChildren,
+  EmergencyRoute: EmergencyRoute,
+  GuidanceRoute: GuidanceRoute,
+  HomeRoute: HomeRoute,
+  InaiRoute: InaiRoute,
+  MapRoute: MapRoute,
+  ProfileRoute: ProfileRoute,
+  SettingsRoute: SettingsRoute,
+  SoundRoute: SoundRoute,
+  SplashRoute: SplashRoute,
+  TranscribeRoute: TranscribeRoute,
+  VisionRoute: VisionRouteWithChildren,
+  AlertIdRoute: AlertIdRoute,
+  OnboardingConfirmRoute: OnboardingConfirmRoute,
+  OnboardingIntroRoute: OnboardingIntroRoute,
+  OnboardingSetupRoute: OnboardingSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
