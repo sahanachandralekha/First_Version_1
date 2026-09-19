@@ -200,10 +200,39 @@
 
 html[data-text-size="AA"] { font-size: 112.5%; }
 html[data-text-size="AAA"] { font-size: 125%; }
-html[data-contrast="high"] { filter: contrast(1.18); }
+html[data-contrast="high"] {
+  --foreground: #000000;
+  --ink: #000000;
+  --muted-foreground: #334155;
+  --line: #64748B;
+  --primary: #1746B5;
+  --primary-deep: #10378F;
+  --hearing: #087A55;
+  --live: #087A31;
+  --warning: #9A5600;
+  --danger: #B42318;
+  --speech: #B4234A;
+  --marginalia: #4667A8;
+}
+
+html, body { overflow-x: clip; }
+
+button:active, a:active { transform: scale(0.97); }
+
+@keyframes toast-up { from { opacity: 0; transform: translate(-50%, .75rem); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes detection-in { from { opacity: 0; } to { opacity: 1; } }
+.inai-toast { animation: toast-up 220ms ease-out both; }
+.detection-overlay { animation: detection-in 120ms ease-out both; }
 
 @keyframes inai-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.965) translateY(0.4%); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+html[data-reduced-motion="true"] *, html[data-reduced-motion="true"] *::before, html[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .01ms !important;
 }
