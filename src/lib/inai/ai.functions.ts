@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = "openai/gpt-6-astra";
 
 const detectionSchema = z.object({
   label: z.string(),
@@ -10,25 +10,55 @@ const detectionSchema = z.object({
 });
 const profileSchema = z.object({ visual: z.boolean(), hearing: z.boolean(), speech: z.boolean() });
 
+/**
+ * Reasoning models run long, so the gateway call always streams and the text is
+ * accumulated server-side — these features only need the finished sentence.
+ */
 async function callGateway(system: string, user: string) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("AI is not configured.");
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Lovable-API-Key": apiKey,
+      "X-Lovable-AIG-SDK": "fetch",
+    },
     body: JSON.stringify({
       model: MODEL,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      instructions: system,
+      input: user,
+      stream: true,
+      store: false,
+      reasoning: { effort: "low" },
     }),
   });
   if (response.status === 429) throw new Error("INAI is busy right now. Please try again in a moment.");
   if (response.status === 402) throw new Error("INAI's AI allowance is used up for now.");
-  if (!response.ok) throw new Error("INAI could not reach its understanding service.");
-  const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  return payload.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!response.ok || !response.body) throw new Error("INAI could not reach its understanding service.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    buffer += decoder.decode(chunk.value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const event = JSON.parse(payload) as { type?: string; delta?: string; response?: { output_text?: string } };
+        if (event.type === "response.output_text.delta" && typeof event.delta === "string") text += event.delta;
+        if (event.type === "response.completed" && !text && event.response?.output_text) text = event.response.output_text;
+      } catch { /* partial frame */ }
+    }
+  }
+  return text.trim();
 }
 
 function parseJson<T>(raw: string, fallback: T): T {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { AnimatePresence, motion } from "motion/react";
@@ -204,7 +204,7 @@ const radarPositions: Record<SoundEvent["direction"], string> = {
   left: "left-[12%] top-1/2", right: "right-[12%] top-1/2", front: "left-1/2 top-[10%]", back: "left-1/2 bottom-[10%]",
 };
 
-function SoundRadar({ events, active }: { events: SoundEvent[]; active?: SoundEvent }) {
+function SoundRadar({ events, active }: { events: SoundEvent[]; active?: SoundEvent | undefined }) {
   return (
     <div className="relative mx-auto aspect-square w-full max-w-80 rounded-full border border-line bg-primary-tint/40" aria-label="Sound radar">
       {[0.75, 0.5, 0.25].map((scale) => (
@@ -288,7 +288,9 @@ export function SoundScreen() {
 /* ---------------------------------------------------------------- Screen 10 */
 
 export function TranscribeScreen() {
-  const supported = useMemo(() => isSpeechRecognitionSupported(), []);
+  // Resolved after hydration so the server and first client render agree.
+  const [supported, setSupported] = useState(true);
+  useEffect(() => { setSupported(isSpeechRecognitionSupported()); }, []);
   const language = useAccessibilityStore((state) => state.prefs.language);
   const [finalText, setFinalText] = useState("");
   const [interim, setInterim] = useState("");
@@ -356,7 +358,7 @@ export function TranscribeScreen() {
 
 /* ---------------------------------------------------------------- Screen 15 */
 
-interface ChatMessage { id: string; role: "user" | "assistant"; text: string; at: string; evidence?: string[] }
+interface ChatMessage { id: string; role: "user" | "assistant"; text: string; at: string; evidence?: string[] | undefined }
 
 const suggestions: Array<[string, string]> = [
   ["Help me navigate", "/guidance"], ["What's around me?", "/vision"], ["What is that sound?", "/sound"],

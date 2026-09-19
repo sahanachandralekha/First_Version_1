@@ -36,10 +36,10 @@ export function visemeForWord(word: string): Viseme {
 const visemeOpenness: Record<Viseme, number> = { closed: 0, m: 0.1, e: 0.4, a: 0.8, o: 0.6, wide: 1 };
 
 export class LipSyncEngine {
-  private frame?: number;
-  private context?: AudioContext;
-  private analyser?: AnalyserNode;
-  private buffer?: Float32Array;
+  private frame: number | undefined;
+  private context: AudioContext | undefined;
+  private analyser: AnalyserNode | undefined;
+  private buffer: Float32Array<ArrayBuffer> | undefined;
   private smoothed = 0;
   private target = 0;
   private running = false;

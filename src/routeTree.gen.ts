@@ -27,6 +27,7 @@ import { Route as CommunicateSignRouteImport } from './routes/communicate.sign'
 import { Route as OnboardingConfirmRouteImport } from './routes/onboarding.confirm'
 import { Route as OnboardingIntroRouteImport } from './routes/onboarding.intro'
 import { Route as OnboardingSetupRouteImport } from './routes/onboarding.setup'
+import { Route as VisionIndexRouteImport } from './routes/vision.index'
 import { Route as VisionLiveRouteImport } from './routes/vision.live'
 
 const IndexRoute = IndexRouteImport.update({
@@ -119,6 +120,11 @@ const OnboardingSetupRoute = OnboardingSetupRouteImport.update({
   path: '/onboarding/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VisionIndexRoute = VisionIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => VisionRoute,
+} as any)
 const VisionLiveRoute = VisionLiveRouteImport.update({
   id: '/live',
   path: '/live',
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/vision/live': typeof VisionLiveRoute
+  '/vision/': typeof VisionIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -159,13 +166,13 @@ export interface FileRoutesByTo {
   '/sound': typeof SoundRoute
   '/splash': typeof SplashRoute
   '/transcribe': typeof TranscribeRoute
-  '/vision': typeof VisionRouteWithChildren
   '/alert/$id': typeof AlertIdRoute
   '/communicate/sign': typeof CommunicateSignRoute
   '/onboarding/confirm': typeof OnboardingConfirmRoute
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/vision/live': typeof VisionLiveRoute
+  '/vision': typeof VisionIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -188,6 +195,7 @@ export interface FileRoutesById {
   '/onboarding/intro': typeof OnboardingIntroRoute
   '/onboarding/setup': typeof OnboardingSetupRoute
   '/vision/live': typeof VisionLiveRoute
+  '/vision/': typeof VisionIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -211,6 +219,7 @@ export interface FileRouteTypes {
     | '/onboarding/intro'
     | '/onboarding/setup'
     | '/vision/live'
+    | '/vision/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -225,13 +234,13 @@ export interface FileRouteTypes {
     | '/sound'
     | '/splash'
     | '/transcribe'
-    | '/vision'
     | '/alert/$id'
     | '/communicate/sign'
     | '/onboarding/confirm'
     | '/onboarding/intro'
     | '/onboarding/setup'
     | '/vision/live'
+    | '/vision'
   id:
     | '__root__'
     | '/'
@@ -253,6 +262,7 @@ export interface FileRouteTypes {
     | '/onboarding/intro'
     | '/onboarding/setup'
     | '/vision/live'
+    | '/vision/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -403,6 +413,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingSetupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vision/': {
+      id: '/vision/'
+      path: '/'
+      fullPath: '/vision/'
+      preLoaderRoute: typeof VisionIndexRouteImport
+      parentRoute: typeof VisionRoute
+    }
     '/vision/live': {
       id: '/vision/live'
       path: '/live'
@@ -427,10 +444,12 @@ const CommunicateRouteWithChildren = CommunicateRoute._addFileChildren(
 
 interface VisionRouteChildren {
   VisionLiveRoute: typeof VisionLiveRoute
+  VisionIndexRoute: typeof VisionIndexRoute
 }
 
 const VisionRouteChildren: VisionRouteChildren = {
   VisionLiveRoute: VisionLiveRoute,
+  VisionIndexRoute: VisionIndexRoute,
 }
 
 const VisionRouteWithChildren =

@@ -3,6 +3,7 @@ import type { AssistanceDirective } from "./events";
 import { hapticStrength, visualEmphasis } from "./context-engine";
 import { ttsService } from "./tts";
 import { supabase } from "@/integrations/supabase/client";
+import { useContextStore } from "@/stores/context-store";
 import type { Json } from "@/integrations/supabase/types";
 
 export interface RoutedOutput {
@@ -29,6 +30,11 @@ export function routeDirective(
     visual: visualEmphasis(profile),
   };
   options.onCaption(directive.message, directive.severity === "critical");
+  if (directive.severity === "critical") {
+    useContextStore.getState().setContext({ alertLevel: "critical", criticalDirective: directive, lastGuidance: directive.message });
+  } else {
+    useContextStore.getState().setContext({ lastGuidance: directive.message });
+  }
   if (output.speak) {
     void ttsService.speak(directive.message, {
       priority: directive.severity === "critical" ? "emergency" : directive.severity === "warn" ? "alert" : "guidance",
