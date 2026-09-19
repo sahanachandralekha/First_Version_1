@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HomeScreen } from "@/components/inai/AppScreens";
+import { HomeScreen } from "@/components/inai/Stage2Screens";
 import { routeHead } from "@/lib/inai/route-head";
 
-export const Route = createFileRoute("/home")({ head: () => routeHead("Good morning", "Adaptive, multimodal support from INAI."), component: HomeScreen });
+export const Route = createFileRoute("/home")({ head: () => routeHead("Your adaptive INAI dashboard", "See the support modules INAI prioritizes for your selected accessibility needs."), component: HomeScreen });
