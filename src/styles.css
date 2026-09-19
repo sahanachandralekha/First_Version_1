@@ -72,6 +72,7 @@
   --color-speech-tint: var(--speech-tint);
   --color-live: var(--live);
   --color-warning: var(--warning);
+  --color-warn: var(--warning);
   --color-ink: var(--ink);
   --color-line: var(--line);
   --radius-card: 1.5rem;
