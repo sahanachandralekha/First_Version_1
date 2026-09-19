@@ -3,12 +3,20 @@ import type { ServiceDescriptor } from "./types";
 export interface SignStep { order: number; gloss: string; description: string; assetUrl?: string; durationMs: number }
 export interface SignPhrase {
   id: string; language: "ISL"; text: string; category: string; steps: SignStep[];
+  /** Search term used to look the phrase up in the public ISL dictionaries. */
+  term: string;
+  /** Public, official reference video for this sign. */
+  reference: { label: string; url: string };
   validation: { status: "validated" | "unvalidated" | "pending-review"; source?: string; reviewedBy?: string; reviewedAt?: string };
 }
 
 export const SIGN_SOURCE = "Prototype ISL registry — reviewed against Indian Sign Language reference material; an accredited ISL expert signs off before production use.";
 
-type Seed = [id: string, text: string, category: string, steps: [gloss: string, description: string][]];
+/** Official ISLRTC (Indian Sign Language Research and Training Centre) video dictionary. */
+const referenceUrl = (term: string) =>
+  `https://www.youtube.com/@ISLRTCOfficial/search?query=${encodeURIComponent(`${term} Indian Sign Language`)}`;
+
+type Seed = [id: string, text: string, category: string, steps: [gloss: string, description: string][], term: string];
 const seeds: Seed[] = [
   ["help_general", "I need help", "help", [
     ["I", "Point to yourself (I)"],
