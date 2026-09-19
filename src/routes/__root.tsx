@@ -13,6 +13,10 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { useAccessibilityStore } from "../stores/accessibility-store";
 import { useSessionStore } from "../stores/session-store";
+import { AlertOverlayHost } from "@/components/inai/AlertOverlayHost";
+import { Toaster } from "@/components/ui/sonner";
+import { ensureAnonymousSession } from "@/lib/inai/session";
+import { startStoreSync } from "@/lib/inai/store-sync";
 
 function NotFoundComponent() {
   return (
@@ -122,6 +126,8 @@ function RootComponent() {
   useEffect(() => {
     void useAccessibilityStore.persist.rehydrate();
     void useSessionStore.persist.rehydrate();
+    void ensureAnonymousSession();
+    startStoreSync();
     const applyAccessibilityPreferences = () => {
       const { textSize, contrast } = useAccessibilityStore.getState().prefs;
       document.documentElement.dataset["textSize"] = textSize;
@@ -137,6 +143,8 @@ function RootComponent() {
       <main id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
+      <AlertOverlayHost />
+      <Toaster position="top-center" />
     </QueryClientProvider>
   );
 }

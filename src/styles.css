@@ -75,45 +75,52 @@
   --color-warn: var(--warning);
   --color-ink: var(--ink);
   --color-line: var(--line);
-  --radius-card: 1.5rem;
-  --radius-control: 1rem;
-  --shadow-inai: 0 8px 24px color-mix(in oklab, var(--ink) 6%, transparent);
+  --radius-card: 24px;
+  --radius-control: 16px;
+  --radius-chip: 999px;
+  --color-hearing-alt: var(--hearing-alt);
+  --color-danger: var(--danger);
+  --color-marginalia: var(--marginalia);
+  --shadow-inai: 0 8px 24px rgba(16, 24, 40, 0.06);
 }
 
 :root {
   --radius: 1rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.208 0.04 265.755);
-  --canvas: oklch(0.979 0.006 255);
-  --ink: oklch(0.208 0.04 265.755);
-  --line: oklch(0.935 0.012 260);
+  --canvas: #F7F9FC;
+  --ink: #0F172A;
+  --line: #E6EAF2;
+  --marginalia: #9BB4E8;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.568 0.215 259.2);
-  --primary-deep: oklch(0.485 0.23 261.4);
-  --primary-tint: oklch(0.958 0.021 259.5);
+  --primary: #2F6BED;
+  --primary-deep: #1E4FD8;
+  --primary-tint: #EAF1FF;
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.968 0.007 247.896);
   --secondary-foreground: oklch(0.208 0.042 265.755);
   --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.493 0.043 257.3);
+  --muted-foreground: #64748B;
   --accent: oklch(0.968 0.007 247.896);
   --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --destructive: #E5342B;
+  --destructive-foreground: #FFFFFF;
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --visual: oklch(0.568 0.215 259.2);
-  --visual-tint: oklch(0.958 0.021 259.5);
-  --hearing: oklch(0.696 0.149 162.5);
-  --hearing-tint: oklch(0.967 0.03 163.5);
-  --speech: oklch(0.647 0.238 15.8);
-  --speech-tint: oklch(0.965 0.025 13.1);
-  --live: oklch(0.627 0.194 149.2);
-  --warning: oklch(0.769 0.17 70.1);
+  --ring: #2F6BED;
+  --visual: #2F6BED;
+  --visual-tint: #EAF1FF;
+  --hearing: #10B981;
+  --hearing-tint: #E8F9F1;
+  --hearing-alt: #7C5CFC;
+  --speech: #F43F5E;
+  --speech-tint: #FFECEF;
+  --danger: #E5342B;
+  --live: #16A34A;
+  --warning: #F59E0B;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -194,6 +201,8 @@
 html[data-text-size="AA"] { font-size: 112.5%; }
 html[data-text-size="AAA"] { font-size: 125%; }
 html[data-contrast="high"] { filter: contrast(1.18); }
+
+@keyframes inai-blink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.965) translateY(0.4%); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

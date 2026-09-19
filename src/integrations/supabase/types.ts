@@ -14,7 +14,245 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accessibility_preferences: {
+        Row: {
+          id: string
+          inai: Json
+          onboarded: boolean
+          prefs: Json
+          profile: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          inai?: Json
+          onboarded?: boolean
+          prefs?: Json
+          profile?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          inai?: Json
+          onboarded?: boolean
+          prefs?: Json
+          profile?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      accessible_places: {
+        Row: {
+          accessibility: Json
+          category: string
+          created_at: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+        }
+        Insert: {
+          accessibility?: Json
+          category?: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+        }
+        Update: {
+          accessibility?: Json
+          category?: string
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+        }
+        Relationships: []
+      }
+      assistance_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      emergency_events: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          payload: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
+      inai_settings: {
+        Row: {
+          id: string
+          settings: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          settings?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          settings?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_phrases: {
+        Row: {
+          created_at: string
+          id: string
+          phrase_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phrase_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phrase_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_phrases_phrase_id_fkey"
+            columns: ["phrase_id"]
+            isOneToOne: false
+            referencedRelation: "sign_phrases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sign_phrases: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          phrase: string
+          status: string
+          video_url: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          phrase: string
+          status?: string
+          video_url?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          phrase?: string
+          status?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
+      transcripts: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          language: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          language?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          language?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
