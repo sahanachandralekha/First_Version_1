@@ -742,11 +742,30 @@ export function EmergencyScreen() {
   const [activated, setActivated] = useState(false);
   const [revealed, setRevealed] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [dispatch, setDispatch] = useState<DispatchResult | null>(null);
+  const [email, setEmail] = useState("");
+  const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const begun = useRef(0);
   const tick = useRef<number | undefined>(undefined);
   const lastSpoken = useRef(0);
   const profile = useAccessibilityStore((s) => s.profile);
+  const sendAlert = useServerFn(dispatchEmergencyAlert);
+  const saveEmail = useServerFn(saveSecurityEmail);
   const showToast = (message: string) => { setToast(message); window.setTimeout(() => setToast(null), 2600); };
+
+  const timeline = useMemo(() => [
+    { label: "Emergency detected", detail: "Just now" },
+    {
+      label: "Location shared",
+      detail: position ? `${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}` : DEFAULT_LOCATION,
+    },
+    {
+      label: dispatch?.dispatched ? "Campus security emailed" : "Campus security not reached",
+      detail: dispatch ? dispatch.reason : "Sending the alert…",
+    },
+    { label: "INAI is guiding you", detail: "Stay calm and stay where you are" },
+  ], [dispatch, position]);
 
   const clearHold = useCallback(() => {
     if (tick.current) window.clearInterval(tick.current);
@@ -759,20 +778,28 @@ export function EmergencyScreen() {
     setProgress(1);
     setActivated(true);
     setRevealed(0);
+    setDispatch(null);
     hapticService.pattern([200, 100, 200, 100, 200]);
     void tts.speak("Help has been requested. Stay where you are. You are safe, and I'm with you.", { priority: "emergency", interrupt: true });
-    TIMELINE.forEach((_, index) => window.setTimeout(() => setRevealed(index + 1), 700 * (index + 1)));
+    [0, 1, 2, 3].forEach((index) => window.setTimeout(() => setRevealed(index + 1), 700 * (index + 1)));
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from("emergency_events").insert({
-        user_id: user.id,
-        kind: "activated",
-        payload: { location: "SKCET, Main Block", notified: ["caretakers", "campus_security", "emergency_services"] },
-        is_simulated: true,
-      });
+      const where = await getPosition();
+      setPosition(where);
+      try {
+        const result = await sendAlert({ data: {
+          location: DEFAULT_LOCATION,
+          latitude: where?.latitude ?? null,
+          longitude: where?.longitude ?? null,
+          needs: { visual: profile.visual, hearing: profile.hearing, speech: profile.speech },
+          note: "",
+        } });
+        setDispatch(result);
+        void tts.speak(result.reason, { priority: "emergency" });
+      } catch {
+        setDispatch({ dispatched: false, to: null, reason: "The alert could not be sent. Please call for help directly." });
+      }
     })();
-  }, [clearHold]);
+  }, [clearHold, profile.hearing, profile.speech, profile.visual, sendAlert]);
 
   const startHold = useCallback(() => {
     if (activated || holding) return;
