@@ -7,4 +7,4 @@ export const Route = createFileRoute("/transcribe")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Live Transcription' subtitle='Follow speech with large, clear text and extracted meaning.' nav=true />; }
+function Page() { return <ScreenShell title={"Live Transcription"} subtitle={"Follow speech with large, clear text and extracted meaning."} nav={true} />; }

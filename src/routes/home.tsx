@@ -7,4 +7,4 @@ export const Route = createFileRoute("/home")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Good morning' subtitle='INAI is monitoring the context you choose to share.' nav=true />; }
+function Page() { return <ScreenShell title={"Good morning"} subtitle={"INAI is monitoring the context you choose to share."} nav={true} />; }

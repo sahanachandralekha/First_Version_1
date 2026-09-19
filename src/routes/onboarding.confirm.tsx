@@ -7,4 +7,4 @@ export const Route = createFileRoute("/onboarding/confirm")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Your INAI experience' subtitle='Review how INAI will personalize your experience.' nav=false />; }
+function Page() { return <ScreenShell title={"Your INAI experience"} subtitle={"Review how INAI will personalize your experience."} nav={false} />; }

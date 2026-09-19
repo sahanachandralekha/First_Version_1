@@ -7,4 +7,4 @@ export const Route = createFileRoute("/settings")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Your INAI. Your Way.' subtitle='Adjust voice, text, contrast, language, haptics, and motion.' nav=true />; }
+function Page() { return <ScreenShell title={"Your INAI. Your Way."} subtitle={"Adjust voice, text, contrast, language, haptics, and motion."} nav={true} />; }

@@ -7,4 +7,4 @@ export const Route = createFileRoute("/inai")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title="Ask Anything. I'm Here." subtitle='Talk with INAI about navigation, sound, surroundings, and communication.' nav=true />; }
+function Page() { return <ScreenShell title={"Ask Anything. I'm Here."} subtitle={"Talk with INAI about navigation, sound, surroundings, and communication."} nav={true} />; }

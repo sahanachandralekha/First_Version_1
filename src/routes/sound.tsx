@@ -7,4 +7,4 @@ export const Route = createFileRoute("/sound")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Sound Awareness' subtitle='See important sounds, direction cues, and context.' nav=true />; }
+function Page() { return <ScreenShell title={"Sound Awareness"} subtitle={"See important sounds, direction cues, and context."} nav={true} />; }

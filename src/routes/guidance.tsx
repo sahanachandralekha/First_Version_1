@@ -7,4 +7,4 @@ export const Route = createFileRoute("/guidance")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title="You're not alone." subtitle='Full-screen, multimodal guidance for the moment ahead.' nav=false />; }
+function Page() { return <ScreenShell title={"You're not alone."} subtitle={"Full-screen, multimodal guidance for the moment ahead."} nav={false} />; }

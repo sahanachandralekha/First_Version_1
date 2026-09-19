@@ -7,4 +7,4 @@ export const Route = createFileRoute("/alert/$id")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Smart Alert' subtitle='Important guidance presented across multiple accessible channels.' nav=false />; }
+function Page() { return <ScreenShell title={"Smart Alert"} subtitle={"Important guidance presented across multiple accessible channels."} nav={false} />; }

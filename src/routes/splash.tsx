@@ -7,4 +7,4 @@ export const Route = createFileRoute("/splash")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Welcome' subtitle='INAI is preparing your adaptive accessibility experience.' nav=false />; }
+function Page() { return <ScreenShell title={"Welcome"} subtitle={"INAI is preparing your adaptive accessibility experience."} nav={false} />; }

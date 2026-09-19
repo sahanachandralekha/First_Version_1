@@ -7,4 +7,4 @@ export const Route = createFileRoute("/onboarding/intro")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Meet INAI' subtitle='Support that speaks, signs, shows text, and stays with you.' nav=false />; }
+function Page() { return <ScreenShell title={"Meet INAI"} subtitle={"Support that speaks, signs, shows text, and stays with you."} nav={false} />; }

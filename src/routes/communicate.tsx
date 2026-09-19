@@ -7,4 +7,4 @@ export const Route = createFileRoute("/communicate")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Express Yourself' subtitle='Speak, type, or choose a verified communication phrase.' nav=true />; }
+function Page() { return <ScreenShell title={"Express Yourself"} subtitle={"Speak, type, or choose a verified communication phrase."} nav={true} />; }

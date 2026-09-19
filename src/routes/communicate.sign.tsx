@@ -7,4 +7,4 @@ export const Route = createFileRoute("/communicate/sign")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Communication Without Limits' subtitle='Play reviewed Indian Sign Language phrase steps.' nav=true />; }
+function Page() { return <ScreenShell title={"Communication Without Limits"} subtitle={"Play reviewed Indian Sign Language phrase steps."} nav={true} />; }

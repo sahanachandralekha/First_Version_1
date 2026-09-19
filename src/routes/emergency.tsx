@@ -7,4 +7,4 @@ export const Route = createFileRoute("/emergency")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Emergency Support' subtitle='A clearly simulated safety flow with guided next steps.' nav=false />; }
+function Page() { return <ScreenShell title={"Emergency Support"} subtitle={"A clearly simulated safety flow with guided next steps."} nav={false} />; }

@@ -7,4 +7,4 @@ export const Route = createFileRoute("/map")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Find Your Way' subtitle='Discover nearby accessible places and route guidance.' nav=true />; }
+function Page() { return <ScreenShell title={"Find Your Way"} subtitle={"Discover nearby accessible places and route guidance."} nav={true} />; }

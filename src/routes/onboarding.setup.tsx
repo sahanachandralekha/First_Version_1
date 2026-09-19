@@ -7,4 +7,4 @@ export const Route = createFileRoute("/onboarding/setup")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='How can I support you?' subtitle='Choose any combination that fits you today.' nav=false />; }
+function Page() { return <ScreenShell title={"How can I support you?"} subtitle={"Choose any combination that fits you today."} nav={false} />; }

@@ -7,4 +7,4 @@ export const Route = createFileRoute("/vision/live")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Live Monitoring' subtitle='Continuous low-chrome environment awareness.' nav=true />; }
+function Page() { return <ScreenShell title={"Live Monitoring"} subtitle={"Continuous low-chrome environment awareness."} nav={true} />; }

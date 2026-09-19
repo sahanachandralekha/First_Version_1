@@ -7,4 +7,4 @@ export const Route = createFileRoute("/profile")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='My Accessibility Profile' subtitle='Review and change how INAI supports you.' nav=true />; }
+function Page() { return <ScreenShell title={"My Accessibility Profile"} subtitle={"Review and change how INAI supports you."} nav={true} />; }

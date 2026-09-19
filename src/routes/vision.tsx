@@ -7,4 +7,4 @@ export const Route = createFileRoute("/vision")({
   component: Page,
 });
 
-function Page() { return <ScreenShell title='Environment Assist' subtitle='Live camera guidance and clear-path support.' nav=true />; }
+function Page() { return <ScreenShell title={"Environment Assist"} subtitle={"Live camera guidance and clear-path support."} nav={true} />; }
