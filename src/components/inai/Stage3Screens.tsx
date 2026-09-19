@@ -288,7 +288,9 @@ export function SoundScreen() {
 /* ---------------------------------------------------------------- Screen 10 */
 
 export function TranscribeScreen() {
-  const supported = useMemo(() => isSpeechRecognitionSupported(), []);
+  // Resolved after hydration so the server and first client render agree.
+  const [supported, setSupported] = useState(true);
+  useEffect(() => { setSupported(isSpeechRecognitionSupported()); }, []);
   const language = useAccessibilityStore((state) => state.prefs.language);
   const [finalText, setFinalText] = useState("");
   const [interim, setInterim] = useState("");
