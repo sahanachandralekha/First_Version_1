@@ -24,8 +24,8 @@
 - [x] Splash: 2.2s, saved profile -> /home else /onboarding/intro
 
 ## Stage 2 of 5 — ADAPTIVE EXPERIENCE
-- [ ] Complete the reference-matched intro, setup, and confirmation flows with captions, muted TTS, edit mode, and cloud profile saving.
-- [ ] Replace the dashboard registry with typed modules, priority scoring, 30-second alert promotion, five-card cap, and More sheet.
-- [ ] Build every adaptive home preview, live 250ms reordering, profile-aware status copy, event history, and developer need toggles.
-- [ ] Complete Profile and Settings, including immediate preference saving and the service-mode disclosure sheet.
-- [ ] Verify Stage 2 routes, keyboard behavior, live adaptation, cloud reads/writes, mobile layout, and preview health.
+- [x] Complete the reference-matched intro, setup, and confirmation flows with captions, muted TTS, edit mode, and cloud profile saving.
+- [x] Replace the dashboard registry with typed modules, priority scoring, 30-second alert promotion, five-card cap, and More sheet.
+- [x] Build every adaptive home preview, live 250ms reordering, profile-aware status copy, event history, and developer need toggles.
+- [x] Complete Profile and Settings, including immediate preference saving and the service-mode disclosure sheet.
+- [x] Verify Stage 2 routes, keyboard behavior, live adaptation, cloud reads/writes, mobile layout, and preview health.
