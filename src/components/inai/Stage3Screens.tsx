@@ -86,11 +86,38 @@ export function VisionScreen() {
   const [detections, setDetections] = useState<VisionDetection[]>([]);
   const [line, setLine] = useState("I'm looking around for you.");
   const [tip, setTip] = useState(true);
+  const [describing, setDescribing] = useState(false);
   const understand = useServerFn(understandScene);
+  const describe = useServerFn(describeScene);
   const lastAsk = useRef(0);
+  const videoEl = useRef<HTMLVideoElement | null>(null);
   const { caption, critical } = useDirectiveRouter();
 
   const handleDetections = useCallback((next: VisionDetection[]) => setDetections(next), []);
+  const handleVideo = useCallback((video: HTMLVideoElement | null) => { videoEl.current = video; }, []);
+
+  /** Sends exactly one frame, and only when the person asks for it. */
+  const describeNow = useCallback(async () => {
+    const video = videoEl.current;
+    if (!video || !video.videoWidth || describing) return;
+    setDescribing(true);
+    setLine("Looking at what's in front of you…");
+    try {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 768 / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = canvas.toDataURL("image/jpeg", 0.7);
+      const result = await describe({ data: { image, profile } });
+      setLine(result.description);
+      void speak(result.description, "guidance");
+    } catch {
+      setLine("I couldn't describe that just now. Please try again in a moment.");
+    } finally {
+      setDescribing(false);
+    }
+  }, [describe, describing, profile, speak]);
 
   useEffect(() => {
     if (!detections.length) return;
