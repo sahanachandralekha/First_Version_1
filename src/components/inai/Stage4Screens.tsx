@@ -327,21 +327,6 @@ export function SignScreen() {
 
   const speakPhrase = () => { void tts.speak(phrase.text, { priority: "alert", interrupt: true }); };
 
-  if (!phrase) {
-    return (
-      <PageFrame nav>
-        <ScreenHeader title="INAI Sign Communication" subtitle="Same Message. More Ways." icon={HeartHandshake} backTo="/communicate" />
-        <main className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-          <HandHeart className="size-12 text-primary" />
-          <p className="text-lg font-semibold text-ink">{missingSignMessage}</p>
-          <div className="flex gap-2">
-            <Button asChild className="rounded-full"><Link to="/communicate">Speak instead</Link></Button>
-          </div>
-        </main>
-      </PageFrame>
-    );
-  }
-
   const currentStep = phrase.steps[step];
 
   return (
@@ -761,8 +746,9 @@ export function EmergencyScreen() {
     TIMELINE.forEach((_, index) => window.setTimeout(() => setRevealed(index + 1), 700 * (index + 1)));
     void (async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
       await supabase.from("emergency_events").insert({
-        user_id: user?.id,
+        user_id: user.id,
         kind: "activated",
         payload: { location: "SKCET, Main Block", notified: ["caretakers", "campus_security", "emergency_services"] },
         is_simulated: true,
