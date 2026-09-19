@@ -29,7 +29,8 @@ function DeviceBar() {
 }
 
 function PageFrame({ children, nav = false }: { children: ReactNode; nav?: boolean }) {
-  const aiDown = useSessionStore((s) => s.serviceHealth.ai === "down");
+  const aiState = useSessionStore((s) => s.serviceHealth["ai"]);
+  const aiDown = aiState === "offline" || aiState === "degraded";
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
     navigator.serviceWorker.register("/sw.js").catch(() => undefined);
@@ -277,7 +278,7 @@ function StepThumb({ phrase, order, failed, onFail }: { phrase: SignPhrase; orde
 export function SignScreen() {
   const phrases = signService.demoPhrases();
   const [selectedId, setSelectedId] = useState("medical_help");
-  const phrase = phrases.find((entry) => entry.id === selectedId) ?? phrases[0];
+  const phrase = phrases.find((entry) => entry.id === selectedId) ?? phrases[0]!;
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
