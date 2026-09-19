@@ -204,7 +204,7 @@ const radarPositions: Record<SoundEvent["direction"], string> = {
   left: "left-[12%] top-1/2", right: "right-[12%] top-1/2", front: "left-1/2 top-[10%]", back: "left-1/2 bottom-[10%]",
 };
 
-function SoundRadar({ events, active }: { events: SoundEvent[]; active?: SoundEvent }) {
+function SoundRadar({ events, active }: { events: SoundEvent[]; active?: SoundEvent | undefined }) {
   return (
     <div className="relative mx-auto aspect-square w-full max-w-80 rounded-full border border-line bg-primary-tint/40" aria-label="Sound radar">
       {[0.75, 0.5, 0.25].map((scale) => (
@@ -356,7 +356,7 @@ export function TranscribeScreen() {
 
 /* ---------------------------------------------------------------- Screen 15 */
 
-interface ChatMessage { id: string; role: "user" | "assistant"; text: string; at: string; evidence?: string[] }
+interface ChatMessage { id: string; role: "user" | "assistant"; text: string; at: string; evidence?: string[] | undefined }
 
 const suggestions: Array<[string, string]> = [
   ["Help me navigate", "/guidance"], ["What's around me?", "/vision"], ["What is that sound?", "/sound"],

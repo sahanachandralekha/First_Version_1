@@ -15,10 +15,10 @@ export interface NormalizedEvent {
   confidence?: number;
   severity: Severity;
   /** Approximate distance in metres — never presented as a measurement. */
-  distance?: number;
-  direction?: "left" | "right" | "front" | "back";
+  distance?: number | undefined;
+  direction?: "left" | "right" | "front" | "back" | undefined;
   /** Direction and distance are simulated in this prototype. */
-  mock?: boolean;
+  mock?: boolean | undefined;
   proximity?: number;
   novelty?: number;
   relevantNeeds?: Need[];
@@ -33,9 +33,9 @@ export interface AssistanceDirective {
   modalities: Modality[];
   avatarState: "idle" | "listening" | "thinking" | "speaking" | "warning" | "emergency" | "signing" | "guiding";
   gesture?: string;
-  direction?: NormalizedEvent["direction"];
-  distance?: number;
-  mock?: boolean;
+  direction?: NormalizedEvent["direction"] | undefined;
+  distance?: number | undefined;
+  mock?: boolean | undefined;
 }
 
 export interface WorldState {

@@ -55,9 +55,9 @@ export type VisionStatus = "idle" | "requesting-camera" | "loading-model" | "run
 export class BrowserVisionDetectionService implements ServiceDescriptor {
   readonly name = "Vision detection"; readonly mode = "REAL" as const;
   readonly description = "Rear camera with on-device object detection at about four frames a second.";
-  private stream?: MediaStream;
-  private model?: { detect(input: HTMLVideoElement): Promise<Array<{ class: string; score: number; bbox: [number, number, number, number] }>> };
-  private timer?: number;
+  private stream: MediaStream | undefined;
+  private model: undefined | { detect(input: HTMLVideoElement): Promise<Array<{ class: string; score: number; bbox: [number, number, number, number] }>> };
+  private timer: number | undefined;
   private detectionListeners = new Set<DetectionListener>();
   private statusListeners = new Set<StatusListener>();
   status: VisionStatus = "idle";

@@ -27,7 +27,7 @@ export const unsupportedSpeechError = {
 export class WebSpeechSTTService implements ServiceDescriptor {
   readonly name = "Speech recognition"; readonly mode = "REAL" as const;
   readonly description = "Continuous browser speech recognition with interim results.";
-  private recognition?: SpeechRecognitionLike;
+  private recognition: SpeechRecognitionLike | undefined;
   private listeners = new Set<RecognitionListener>();
   private wantsRunning = false;
   language = "en-IN";

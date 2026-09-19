@@ -56,10 +56,10 @@ type SoundListener = (event: SoundEvent) => void;
 export class BrowserAudioEventService implements ServiceDescriptor {
   readonly name = "Sound classification"; readonly mode = "REAL" as const;
   readonly description = "Browser audio analysis with heuristic sound classes. Direction and distance are simulated.";
-  private context?: AudioContext;
-  private analyser?: AnalyserNode;
-  private stream?: MediaStream;
-  private timer?: number;
+  private context: AudioContext | undefined;
+  private analyser: AnalyserNode | undefined;
+  private stream: MediaStream | undefined;
+  private timer: number | undefined;
   private history: number[] = [];
   private lastEmitted = new Map<SoundClass, number>();
   private listeners = new Set<SoundListener>();
