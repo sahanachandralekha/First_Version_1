@@ -10,7 +10,9 @@ const sizeClasses: Record<AvatarSize, string> = { xs: "size-16", sm: "size-24", 
 const labels: Record<AvatarState, string> = { idle: "INAI is ready", listening: "INAI is listening", thinking: "INAI is thinking", speaking: "INAI is speaking", warning: "INAI is sharing a warning", emergency: "INAI is supporting an emergency flow", signing: "INAI is demonstrating a sign", guiding: "INAI is guiding you" };
 export function INAIAvatar({ state = "idle", gesture, mouthOpenness = 0, gaze = "center", size = "md", intensity = 1, signSequence, speech = "" }: INAIAvatarProps) {
   const driver = useMemo(() => createAvatarDriver("sprite"), []);
-  const renderState = { state, gesture, mouthOpenness, gaze, size, intensity, signSequence };
+  const renderState: AvatarRenderState = { state, mouthOpenness, gaze, size, intensity };
+  if (gesture !== undefined) renderState.gesture = gesture;
+  if (signSequence !== undefined) renderState.signSequence = signSequence;
   const approvedSpritesAvailable = false;
   return <>
     <motion.div role="img" aria-label={labels[state]} className={`relative isolate overflow-hidden rounded-full bg-primary-tint ${sizeClasses[size]}`} animate={{ scale: approvedSpritesAvailable ? [1, 1.015, 1] : 1 }} transition={{ duration: 4, repeat: Infinity }}>

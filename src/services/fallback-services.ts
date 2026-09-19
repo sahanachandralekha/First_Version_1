@@ -3,7 +3,7 @@ import type { NormalizedEvent } from "./events";
 export class ProtectedSceneService implements SceneService {
   readonly name = "Scene understanding"; readonly mode = "REAL" as const;
   readonly description = "Protected AI scene interpretation, connected in a later backend stage.";
-  async understand(_image: Blob) { throw new Error("Scene understanding is temporarily unavailable. Raw detections can still continue."); }
+  async understand(_image: Blob): Promise<string> { throw new Error("Scene understanding is temporarily unavailable. Raw detections can still continue."); }
 }
 export class MockAudioService implements AudioService {
   readonly name = "Sound direction"; readonly mode = "MOCK" as const;

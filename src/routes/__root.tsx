@@ -124,8 +124,8 @@ function RootComponent() {
     void useSessionStore.persist.rehydrate();
     const applyAccessibilityPreferences = () => {
       const { textSize, contrast } = useAccessibilityStore.getState().prefs;
-      document.documentElement.dataset.textSize = textSize;
-      document.documentElement.dataset.contrast = contrast;
+      document.documentElement.dataset["textSize"] = textSize;
+      document.documentElement.dataset["contrast"] = contrast;
     };
     applyAccessibilityPreferences();
     return useAccessibilityStore.subscribe(applyAccessibilityPreferences);
