@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { NormalizedEvent } from "@/services/events";
+import type { AssistanceDirective, NormalizedEvent } from "@/services/events";
 
 export interface Detection { id: string; label: string; confidence: number; distanceMetres?: number }
 export interface AudioEvent { id: string; label: string; confidence: number; direction?: string; distanceMetres?: number }
@@ -12,6 +12,7 @@ interface ContextState {
   location: { latitude: number; longitude: number; label?: string } | null;
   alertLevel: NormalizedEvent["severity"];
   lastGuidance: string;
+  criticalDirective: AssistanceDirective | null;
   conversation: ConversationMessage[];
   setContext: (patch: Partial<Omit<ContextState, "setContext">>) => void;
   reset: () => void;
@@ -19,7 +20,7 @@ interface ContextState {
 
 const initial = {
   detections: [], audioEvents: [], transcript: "", location: null,
-  alertLevel: "info" as const, lastGuidance: "", conversation: [],
+  alertLevel: "info" as const, lastGuidance: "", criticalDirective: null, conversation: [],
 };
 
 export const useContextStore = create<ContextState>((set) => ({
