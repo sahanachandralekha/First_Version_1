@@ -79,10 +79,35 @@ export const understandScene = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const fallback = { summary: "", priority: "info", guidance: "", hazards: [] as string[] };
-    const listed = data.detections.map((d) => `${d.label}${d.approxDistance ? ` ~${Math.round(d.approxDistance)} m` : ""}`).join(", ") || "nothing recognised";
+    // Sort nearest-first so the model weighs what matters most, and keep confidence so it can discount shaky reads.
+    const sorted = [...data.detections].sort((a, b) => (a.approxDistance ?? 99) - (b.approxDistance ?? 99));
+    const listed = sorted
+      .map((d) => {
+        const bits = [d.label];
+        if (d.approxDistance) bits.push(`about ${Math.round(d.approxDistance)} m away`);
+        if (d.confidence !== undefined && d.confidence < 0.7) bits.push("uncertain detection");
+        return bits.join(", ");
+      })
+      .join("; ") || "nothing recognised";
+    const needs = [
+      data.profile.visual && "limited vision (describe positions and obstacles concretely)",
+      data.profile.hearing && "limited hearing (they cannot hear approaching vehicles or warnings)",
+      data.profile.speech && "limited speech (keep guidance answerable without speaking)",
+    ].filter(Boolean).join("; ") || "no specific limitation given";
     const raw = await callGateway(
-      "You help a person with visual, hearing or speech accessibility needs understand what is happening around them right now. Say what the scene actually is and what is going on in it — not just a list of objects: where things are (left, ahead, right), whether anything is moving toward the person, and what that means for their next step. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. summary describes what is happening (under 30 words); guidance is the single most useful next action (under 20 words). Warm, plain, spoken language.",
-      `Detections: ${listed}\nProfile: visual=${data.profile.visual}, hearing=${data.profile.hearing}, speech=${data.profile.speech}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
+      `You are the situational-awareness core of INAI, an accessibility companion. You receive on-device object detections from the person's camera and turn them into a short, truthful read of the scene.
+
+Rules:
+- Say what the scene IS (a corridor, a road crossing, a crowded room) only when the detections genuinely imply it; otherwise say what is there without naming a place.
+- Anchor everything spatially: near/far, and left/ahead/right only if the list gives positions — never guess positions.
+- Priority: the nearest moving thing that could affect the person (vehicle, bicycle, person approaching) decides "warn"/"critical"; "warn" only when something is within roughly 4 m, "critical" within roughly 2 m. Static furniture or distant people are "info"/"notice".
+- Guidance must be one concrete physical action ("pause and hold the rail", "step left toward the open floor"), never vague advice like "be careful" or "stay alert".
+- If previous guidance is given, do not repeat it unless nothing changed; say what changed instead.
+- Distances are always approximate. Never invent objects, movement, exits, or signs that are not in the list.
+- Adapt wording to the person's needs listed below.
+
+Reply ONLY with JSON: {"summary":string,"priority":"info"|"notice"|"warn"|"critical","guidance":string,"hazards":string[]}. summary describes what is happening right now (under 30 words, spoken language, no object-list recital); guidance is the single most useful next action (under 20 words); hazards lists only the detections that genuinely threaten safety.`,
+      `Detections (nearest first): ${listed}\nPerson's needs: ${needs}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
     );
     return parseJson(raw, fallback);
   });
