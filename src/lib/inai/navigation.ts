@@ -14,7 +14,7 @@ export function resolveNavigation(profile: AccessibilityProfile): [NavItem, NavI
   };
   const fallbackPair: [NavItem, NavItem] = [{ label: "Assist", to: "/vision", icon: "assist" }, { label: "Map", to: "/map", icon: "map" }];
   const [second, fourth] = pairs[key] ?? fallbackPair;
-  const micLabel = key === "s" || key === "hs" ? "Tap to Speak" : key === "vs" || key === "vhs" ? "Talk to INAI" : "INAI";
+  const micLabel = key === "v" ? "Tap to Speak" : key === "s" || key === "vs" || key === "hs" ? "Talk to INAI" : "INAI";
   return [
     { label: "Home", to: "/home", icon: "home" }, second,
     { label: micLabel, to: "/inai", icon: "mic" }, fourth,

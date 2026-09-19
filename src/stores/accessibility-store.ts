@@ -36,38 +36,35 @@ interface AccessibilityState {
   profile: AccessibilityProfile;
   prefs: AccessibilityPreferences;
   inai: INAISettings;
+  onboarded: boolean;
   announcement: string;
   setNeed: (need: Need, active: boolean) => void;
   setProfile: (profile: AccessibilityProfile) => void;
+  setPref: <K extends keyof AccessibilityPreferences>(key: K, value: AccessibilityPreferences[K]) => void;
   setPreference: <K extends keyof AccessibilityPreferences>(key: K, value: AccessibilityPreferences[K]) => void;
   setINAISetting: <K extends keyof INAISettings>(key: K, value: INAISettings[K]) => void;
+  setOnboarded: (value: boolean) => void;
+  reset: () => void;
   clearAnnouncement: () => void;
 }
 
 const defaultProfile: AccessibilityProfile = { visual: true, hearing: true, speech: false };
+const defaultPrefs: AccessibilityPreferences = {
+  voiceEnabled: true, signEnabled: false, hapticEnabled: true, textSize: "A",
+  contrast: "default", alertIntensity: "medium", language: "en-IN", reducedMotion: false,
+};
+const defaultInai: INAISettings = {
+  voiceId: "auto-en-IN", speakingRate: 1, pitch: 1, signMode: "captions",
+  animationSpeed: 1, avatarVariant: "classic",
+};
 
 export const useAccessibilityStore = create<AccessibilityState>()(
   persist(
     (set) => ({
       profile: defaultProfile,
-      prefs: {
-        voiceEnabled: true,
-        signEnabled: false,
-        hapticEnabled: true,
-        textSize: "A",
-        contrast: "default",
-        alertIntensity: "medium",
-        language: "en-IN",
-        reducedMotion: false,
-      },
-      inai: {
-        voiceId: "auto-en-IN",
-        speakingRate: 1,
-        pitch: 1,
-        signMode: "captions",
-        animationSpeed: 1,
-        avatarVariant: "classic",
-      },
+      prefs: defaultPrefs,
+      inai: defaultInai,
+      onboarded: false,
       announcement: "",
       setNeed: (need, active) =>
         set((state) => ({
@@ -75,8 +72,11 @@ export const useAccessibilityStore = create<AccessibilityState>()(
           announcement: "I've updated your experience.",
         })),
       setProfile: (profile) => set({ profile, announcement: "I've updated your experience." }),
+      setPref: (key, value) => set((state) => ({ prefs: { ...state.prefs, [key]: value } })),
       setPreference: (key, value) => set((state) => ({ prefs: { ...state.prefs, [key]: value } })),
       setINAISetting: (key, value) => set((state) => ({ inai: { ...state.inai, [key]: value } })),
+      setOnboarded: (onboarded) => set({ onboarded }),
+      reset: () => set({ profile: defaultProfile, prefs: defaultPrefs, inai: defaultInai, onboarded: false }),
       clearAnnouncement: () => set({ announcement: "" }),
     }),
     { name: "inai-accessibility", skipHydration: true },
