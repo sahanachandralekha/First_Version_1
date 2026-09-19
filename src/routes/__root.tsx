@@ -132,9 +132,10 @@ function RootComponent() {
     void ensureAnonymousSession();
     startStoreSync();
     const applyAccessibilityPreferences = () => {
-      const { textSize, contrast } = useAccessibilityStore.getState().prefs;
+      const { textSize, contrast, reducedMotion } = useAccessibilityStore.getState().prefs;
       document.documentElement.dataset["textSize"] = textSize;
       document.documentElement.dataset["contrast"] = contrast;
+      document.documentElement.dataset["reducedMotion"] = String(reducedMotion);
     };
     applyAccessibilityPreferences();
     return useAccessibilityStore.subscribe(applyAccessibilityPreferences);
