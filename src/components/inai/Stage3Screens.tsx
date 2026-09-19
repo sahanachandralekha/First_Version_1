@@ -7,6 +7,7 @@ import {
   Mic, Navigation, Repeat, Save, Send, Settings, ShieldAlert, Sparkles, ThumbsDown, ThumbsUp, Volume2, X,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/primitives";
+import { useSessionStore } from "@/stores/session-store";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { INAIAvatar } from "@/components/inai/INAIAvatar";
 import { CaptionRegion } from "@/components/inai/CaptionRegion";
