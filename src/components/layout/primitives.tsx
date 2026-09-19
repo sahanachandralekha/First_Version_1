@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Sparkles, type LucideIcon } from "lucide-react";
 
 /** Centered 480px app frame: soft page background, full width on mobile, safe-area padding. */
-export function AppShell({ children, nav = false, className = "" }: { children: ReactNode; nav?: boolean; className?: string }) {
+export function AppShell({ children, nav = false, className = "" }: { children: ReactNode; nav?: boolean | ReactNode; className?: string }) {
   return (
     <div className="min-h-dvh bg-canvas">
       <div className={`mx-auto flex min-h-dvh max-w-[480px] flex-col bg-background pb-[env(safe-area-inset-bottom)] shadow-inai ${className}`}>
