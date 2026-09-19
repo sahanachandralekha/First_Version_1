@@ -309,7 +309,7 @@ export function TranscribeScreen() {
 
   useEffect(() => {
     if (!finalText) return;
-    void summarize({ data: { transcript: finalText } }).then(setMeaning).catch(() => undefined);
+    void summarize({ data: { transcript: finalText } }).then(setMeaning).catch(() => { useSessionStore.getState().setServiceHealth("ai", "offline"); });
   }, [finalText, summarize]);
 
   return (
@@ -408,6 +408,7 @@ export function InaiScreen() {
       }]);
       void speak(result.reply, "chat");
     } catch {
+      useSessionStore.getState().setServiceHealth("ai", "offline");
       setMessages((current) => [...current, { id: `e-${Date.now()}`, role: "assistant", text: "I couldn't reach my understanding service just now. I'm still here with you.", at }]);
     } finally {
       setBusy(false);
