@@ -1,31 +1,31 @@
-# INAI reference-matched application
+# Rebuild INAI from the supplied references
 
 ## Goal
-Replace the current foundation preview and placeholder pages with the complete mobile-first INAI experience. The supplied screenshots are the visual source of truth, and the supplied transparent avatar becomes the canonical INAI character.
+Match the supplied INAI screens closely, use the uploaded INAI character consistently, and connect all visible controls to the existing adaptive state and browser capabilities.
 
-## Build
+## Build stages
 1. **Shared visual system and avatar**
-   - Match the reference typography, white/canvas surfaces, blue/green/rose assistance colors, compact shadows, rounded controls, mobile status spacing, and bottom navigation.
-   - Store the supplied avatar through the project asset flow and render it consistently through `INAIAvatar`, with state labels, reduced-motion behavior, captions, and graceful pose reuse where no separate approved pose exists.
+   - Keep the exact white/soft-blue palette, Plus Jakarta Sans typography, rounded cards, spacing, and mobile proportions from the references.
+   - Register the uploaded transparent character as the canonical avatar and reuse it across every screen without generating variants.
+   - Refine shared headers, navigation, alerts, captions, buttons, and status treatments.
 
 2. **Entry and onboarding**
-   - Build the splash, introduction, assistance selection, and confirmation screens to match references.
-   - Connect Skip, Next, Back, multi-select validation, confirmation, persisted profile state, and immediate accessibility announcements.
+   - Build Splash, Meet INAI, needs selection, and confirmation screens.
+   - Persist any combination of Visual, Hearing, and Speech needs and update the experience immediately.
 
-3. **Adaptive daily assistance**
-   - Build Home, Vision, Smart Alert, Live Vision, Sound Awareness, and Transcription with the reference layouts.
-   - Connect profile-driven module ordering and navigation, live/mock mode labels, dismissible guidance, alert acknowledgement, camera/microphone permission states, and safe degraded states.
+3. **Daily assistance**
+   - Build the adaptive Home dashboard, Environment Assist, Live Monitoring, warning overlay, Sound Awareness, and Transcription.
+   - Connect camera, microphone, speech, alerts, haptics, and degraded permission states through the existing services.
 
 4. **Communication, navigation, and safety**
-   - Build Speak/Type/Sign communication, verified ISL phrase playback, map guidance, three-second emergency hold, INAI chat, and full guidance.
-   - Keep simulated direction, indoor place, and emergency behavior visibly labeled; never imply real dispatch or unverified signing.
+   - Build Express Yourself, verified ISL phrase playback, map guidance, emergency hold flow, INAI conversation, and full-screen guidance.
+   - Clearly label simulated capabilities and never imply real emergency dispatch or unverified sign translation.
 
 5. **Profile, settings, and verification**
-   - Build profile and settings controls, service-mode disclosure, text sizing, contrast, haptics, reduced motion, voice controls, and the hidden demo sequence.
-   - Verify all 18 routes and key flows at phone and desktop sizes, checking overflow, keyboard access, focus, captions, route metadata, and build health.
+   - Build live profile controls and all requested settings, including service-mode disclosure and Demo Mode.
+   - Verify every route and key interaction on mobile and desktop, including keyboard access, large text, high contrast, reduced motion, and no overflow.
 
 ## Technical details
-- Keep the existing TanStack Start architecture while implementing the requested user experience; use existing persisted Zustand stores and service interfaces.
-- Use browser capabilities only through the existing REAL/MOCK/FUTURE service boundary and preserve safe fallbacks when permissions or AI are unavailable.
-- Reuse the single supplied avatar image for approved states until additional matching transparent pose and mouth assets are supplied; do not invent or generate alternate character art.
-- Keep every screen usable without a model response, with local quick phrases, signs, speech, raw detections, and the simulated emergency flow available.
+- Preserve TanStack Start routing, React 19, Tailwind v4, Zustand persistence, the service interfaces, and the adaptive resolver.
+- Use local/generated imagery only for environmental camera scenes; the uploaded character remains the sole INAI character asset.
+- Keep AI secrets server-side and defer database schema and AI endpoints to their requested backend stage.
