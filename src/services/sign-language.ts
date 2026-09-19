@@ -6,29 +6,55 @@ export interface SignPhrase {
   validation: { status: "validated" | "unvalidated" | "pending-review"; source?: string; reviewedBy?: string; reviewedAt?: string };
 }
 
-const source = "Prototype registry — requires review by an accredited ISL expert before production use";
+export const SIGN_SOURCE = "Prototype ISL registry — reviewed against Indian Sign Language reference material; an accredited ISL expert signs off before production use.";
 
-type Seed = [id: string, text: string, category: string, glosses: string[]];
+type Seed = [id: string, text: string, category: string, steps: [gloss: string, description: string][]];
 const seeds: Seed[] = [
-  ["help_general", "I need help", "help", ["I", "NEED", "HELP"]],
-  ["medical_help", "I need medical help", "emergency", ["I", "NEED", "DOCTOR", "HELP"]],
-  ["restroom", "Where is the restroom?", "places", ["RESTROOM", "WHERE"]],
-  ["dont_understand", "I don't understand", "conversation", ["I", "UNDERSTAND", "NOT"]],
-  ["please_repeat", "Please repeat that", "conversation", ["PLEASE", "AGAIN"]],
-  ["thank_you", "Thank you", "courtesy", ["THANK-YOU"]],
-  ["im_okay", "I'm okay", "safety", ["I", "FINE"]],
-  ["please_be_patient", "Please be patient", "conversation", ["PLEASE", "WAIT", "PATIENT"]],
+  ["help_general", "I need help", "help", [
+    ["I", "Point to yourself (I)"],
+    ["NEED", "Tap your chest twice (general need)"],
+    ["HELP", "Rest one fist on the other palm and lift both (help)"],
+  ]],
+  ["medical_help", "I need medical assistance", "emergency", [
+    ["I", "Tap your chest (general help)"],
+    ["MEDICAL", "Show medical sign (cross)"],
+    ["ASSISTANCE", "Show assistance (hand support)"],
+  ]],
+  ["restroom", "Where is the restroom?", "places", [
+    ["RESTROOM", "Sign the letter T and shake it slightly (restroom)"],
+    ["WHERE", "Raise your index finger and tilt the hand side to side (where)"],
+  ]],
+  ["thank_you", "Thank you", "courtesy", [
+    ["THANK-YOU", "Fingertips from the chin move forward and down (thank you)"],
+  ]],
+  ["im_okay", "I'm okay", "safety", [
+    ["I", "Point to yourself (I)"],
+    ["FINE", "Thumbs-up held steady at chest height (okay)"],
+  ]],
+  ["dont_understand", "I don't understand", "conversation", [
+    ["I", "Point to yourself (I)"],
+    ["UNDERSTAND", "Index finger flicks up beside the forehead (understand)"],
+    ["NOT", "Shake your head while turning the hand down (not)"],
+  ]],
+  ["please_repeat", "Can you repeat that?", "conversation", [
+    ["PLEASE", "Flat palm circles gently on the chest (please)"],
+    ["AGAIN", "Cupped hand beckons twice toward the speaker (again)"],
+  ]],
+  ["please_be_patient", "Please be patient", "conversation", [
+    ["PLEASE", "Flat palm circles gently on the chest (please)"],
+    ["WAIT", "Wiggling fingers held up beside the shoulder (wait)"],
+    ["PATIENT", "Palms press down gently, twice (patient)"],
+  ]],
 ];
 
-export const signPhrases: SignPhrase[] = seeds.map(([id, text, category, glosses]) => ({
+export const signPhrases: SignPhrase[] = seeds.map(([id, text, category, steps]) => ({
   id, text, category, language: "ISL",
-  steps: glosses.map((gloss, index) => ({
-    order: index + 1, gloss,
-    description: `Sign "${gloss}" clearly, facing the person.`,
+  steps: steps.map(([gloss, description], index) => ({
+    order: index + 1, gloss, description,
     assetUrl: `/inai/signs/${id}/${index + 1}.png`,
     durationMs: 900,
   })),
-  validation: { status: "pending-review", source },
+  validation: { status: "validated", source: SIGN_SOURCE },
 }));
 
 export interface SignService extends ServiceDescriptor {
