@@ -376,10 +376,19 @@ export function SignScreen() {
         </div>
 
         <div className="mt-5 rounded-card border border-line bg-background p-4 shadow-inai">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {phrase.category === "emergency" && <Cross aria-hidden="true" className="size-5 text-speech" />}
             <h3 className="text-lg font-extrabold text-ink">{phrase.text}</h3>
+            <a
+              href={phrase.reference.url}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto inline-flex min-h-11 items-center rounded-full border border-primary/30 bg-primary-tint px-4 text-sm font-bold text-primary"
+            >
+              Watch the real sign
+            </a>
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">Reference: {phrase.reference.label}</p>
 
           <div className="mt-3 grid grid-cols-3 gap-3">
             {phrase.steps.map((entry, index) => (
@@ -943,10 +952,10 @@ export function EmergencyScreen() {
 
         <div className="mt-6 grid grid-cols-2 gap-3">
           {[
-            { icon: Bell, title: "Alert Caretakers", sub: "Family & Friends", message: "Your caretakers have been alerted. This is a simulation." },
-            { icon: Share2, title: "Share Location", sub: "Real-time GPS", message: "Your live location is being shared. This is a simulation." },
-            { icon: Home, title: "Notify Campus", sub: "Security & Staff", message: "Campus security has been notified. This is a simulation." },
-            { icon: Siren, title: "Contact Emergency", sub: "Nearby Help", message: "Nearby emergency help has been contacted. This is a simulation." },
+            { icon: Bell, title: "Alert Caretakers", sub: "Family & Friends", message: "Caretaker alerts are not set up yet. This is a simulation." },
+            { icon: Share2, title: "Share Location", sub: "Real-time GPS", message: "Your location is included in the email alert when you hold for help." },
+            { icon: Home, title: "Notify Campus", sub: "Security & Staff", message: savedEmail ? `Hold "I need help" to email ${savedEmail}.` : "Add a campus security email above so this alert is real." },
+            { icon: Siren, title: "Contact Emergency", sub: "Nearby Help", message: "INAI cannot contact emergency services. Please call them directly." },
           ].map(({ icon: Icon, title, sub, message }) => (
             <button
               key={title}
