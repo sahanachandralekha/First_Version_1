@@ -16,6 +16,8 @@ import { BrowserTTSService } from "@/services/tts";
 import { hapticService } from "@/services/haptics";
 import { signService, SIGN_SOURCE, type SignPhrase } from "@/services/sign-language";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { dispatchEmergencyAlert, saveSecurityEmail, type DispatchResult } from "@/lib/inai/emergency.functions";
 
 const tts = new BrowserTTSService();
 const footer = <p className="py-5 text-center text-[10px] font-bold uppercase tracking-[.25em] text-muted-foreground">People · Access · Opportunities · Together</p>;
@@ -718,12 +720,19 @@ export function MapScreen() {
 
 // ---------------------------------------------------------------- Screen 14
 
-const TIMELINE = [
-  { label: "Emergency detected", detail: "Just now" },
-  { label: "Location shared", detail: "SKCET, Main Block" },
-  { label: "Help requested", detail: "Campus security notified" },
-  { label: "INAI is guiding you", detail: "Stay calm. Help is on the way" },
-];
+const DEFAULT_LOCATION = "SKCET, Main Block";
+
+/** Asks the browser for a real position; falls back quietly when refused. */
+function getPosition(): Promise<{ latitude: number; longitude: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 30000 },
+    );
+  });
+}
 const HELP_PHRASES = ["I cannot speak", "I need medical help", "Please call my emergency contact"];
 
 export function EmergencyScreen() {
