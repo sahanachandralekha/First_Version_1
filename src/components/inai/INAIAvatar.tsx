@@ -57,17 +57,20 @@ export function INAIAvatar({
   if (signSequence !== undefined) renderState.signSequence = signSequence;
 
   const poseSrc = driver.getPose(renderState);
-  const mouthSrc = driver.getMouth(mouthOpenness);
+  const mouthSrc = driver.getMouth(mouthOpenness) || null;
   const [pose, setPose] = useState(poseSrc);
   const [mouth, setMouth] = useState<string | null>(mouthSrc);
+  // Randomized blink timing is client-only so server and client markup match.
+  const [blink, setBlink] = useState<string | undefined>(undefined);
 
   useEffect(() => { setPose(poseSrc); }, [poseSrc]);
   useEffect(() => { setMouth(mouthSrc); }, [mouthSrc]);
+  useEffect(() => { setBlink(`inai-blink ${(3 + Math.random() * 3).toFixed(2)}s ease-in-out infinite`); }, []);
 
   // Missing sprite asset falls back to idle, then to the bundled character — silently.
   const onPoseError = () => {
-    if (pose !== IDLE_POSE) setPose(IDLE_POSE);
-    else setPose(fallbackAsset.url);
+    if (pose !== IDLE_POSE && pose !== fallbackAsset.url) setPose(IDLE_POSE);
+    else if (pose !== fallbackAsset.url) setPose(fallbackAsset.url);
   };
 
   return (
@@ -88,7 +91,7 @@ export function INAIAvatar({
             onError={onPoseError}
             alt=""
             className="absolute inset-0 size-full object-contain"
-            style={reduceMotion ? undefined : { animation: `inai-blink ${3 + Math.random() * 3}s ease-in-out infinite` }}
+            style={reduceMotion || !blink ? undefined : { animation: blink }}
           />
           {!reduceMotion && mouth && (
             <img
