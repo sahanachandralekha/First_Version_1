@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   CirclePlay, Ear, Eye, MapPin, MessageCircle, Navigation, Play, Type, Volume2,
@@ -25,6 +25,13 @@ export interface DashboardModule {
   size: ModuleSize;
   component: ComponentType<DashboardPreviewProps>;
 }
+
+const accentClasses = {
+  visual: "bg-visual-tint text-visual",
+  hearing: "bg-hearing-tint text-hearing",
+  speech: "bg-speech-tint text-speech",
+  primary: "bg-primary-tint text-primary",
+};
 
 const noBoost = () => 0;
 const moduleLink: Record<string, "/vision" | "/sound" | "/transcribe" | "/communicate" | "/communicate/sign" | "/map"> = {
@@ -80,9 +87,9 @@ export function resolveDashboard(profile: AccessibilityProfile, context: Dashboa
   return { visible:eligible.slice(0,5), overflow:eligible.slice(5) };
 }
 
-export function DashboardCard({ module, children }: { module: ReturnType<typeof resolveDashboard>["visible"][number]; children?: React.ReactNode }) {
+export function DashboardCard({ module, children }: { module: ReturnType<typeof resolveDashboard>["visible"][number]; children?: ReactNode }) {
   const Icon=module.icon;
   const destination=moduleLink[module.id];
-  const body=<article className={`h-full rounded-card border border-line bg-background p-4 shadow-inai ${module.size === "hero" ? "sm:col-span-2" : ""}`}><header className="mb-3 flex items-center gap-3"><span className={`grid size-11 place-items-center rounded-full bg-${module.accent}-tint text-${module.accent}`}><Icon/></span><h2 className="font-extrabold text-ink">{module.title}</h2></header>{children ?? <module.component size={module.size}/>}</article>;
+  const body=<article className="h-full rounded-card border border-line bg-background p-4 shadow-inai"><header className="mb-3 flex items-center gap-3"><span className={`grid size-11 place-items-center rounded-full ${accentClasses[module.accent]}`}><Icon/></span><h2 className="font-extrabold text-ink">{module.title}</h2></header>{children ?? <module.component size={module.size}/>}</article>;
   return destination ? <Link to={destination} className={module.size === "hero" ? "sm:col-span-2" : ""}>{body}</Link> : body;
 }
