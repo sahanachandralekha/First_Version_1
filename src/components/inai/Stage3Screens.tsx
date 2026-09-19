@@ -142,7 +142,7 @@ export function VisionScreen() {
     <Page>
       <Header title="AI Vision" subtitle="INAI describes what is in front of you." />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
-        <CameraStage onDetections={handleDetections} />
+        <CameraStage onDetections={handleDetections} onVideoReady={handleVideo} />
         <DockedINAI line={line} speaking={speaking} mouth={mouthOpenness} />
         <div className="grid grid-cols-3 gap-2">
           {(chips.length ? chips : [{ id: "wait", label: "Looking", approxDistance: 0 } as VisionDetection]).map((chip) => (
@@ -153,7 +153,7 @@ export function VisionScreen() {
           ))}
         </div>
         <ActionRow actions={[
-          [<Eye key="d" className="size-5" />, "Describe More", () => { lastAsk.current = 0; setDetections((value) => [...value]); }],
+          [<Eye key="d" className="size-5" />, describing ? "Describing…" : "Describe this scene", () => { void describeNow(); }],
           [<Navigation key="n" className="size-5" />, "Navigation", undefined],
           [<Camera key="p" className="size-5" />, "Take Photo", undefined],
         ]} />
