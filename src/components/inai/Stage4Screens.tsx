@@ -149,7 +149,7 @@ export function CommunicateScreen() {
       <ScreenHeader title="Communication Assistant" subtitle="Your voice, in every way." icon={MessageCircle} backTo="/home" />
       <div className="relative flex-1 px-5 pb-6">
         <ScriptNote className="right-4 top-1">Different Ways, Same Voice.</ScriptNote>
-        <h1 className="pt-2 text-3xl font-extrabold text-ink">Express Yourself</h1>
+        <h2 className="pt-2 text-3xl font-extrabold text-ink">Express Yourself</h2>
         <p className="mt-1 text-muted-foreground">Type, speak or use sign language. INAI will help you communicate.</p>
 
         <div className="mt-4 grid grid-cols-[1fr_9rem] items-start gap-2">
@@ -342,7 +342,7 @@ export function SignScreen() {
     <PageFrame nav>
       <ScreenHeader title="INAI Sign Communication" subtitle="Same Message. More Ways." icon={HeartHandshake} backTo="/communicate" />
       <div className="flex-1 px-5 pb-6">
-        <h1 className="pt-2 text-3xl font-extrabold text-ink">Communication Without Limits</h1>
+        <h2 className="pt-2 text-3xl font-extrabold text-ink">Communication Without Limits</h2>
 
         <div className="mt-3 flex items-start justify-between gap-3">
           <div className="flex-1 rounded-card border border-primary/10 bg-primary-tint p-4 shadow-inai">
@@ -606,7 +606,7 @@ export function MapScreen() {
       />
       <div className="flex-1 px-5 pb-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold text-ink">Find Your Way</h1>
+          <h2 className="text-2xl font-extrabold text-ink">Find Your Way</h2>
           <span className="rounded-full border border-line px-3 py-1 text-xs font-bold text-muted-foreground">SKCET Campus</span>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">Discover nearby accessible places and get step-by-step guidance.</p>
@@ -806,7 +806,7 @@ export function EmergencyScreen() {
           SIMULATED — this prototype does not contact real emergency services.
         </div>
 
-        <h1 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h1>
+        <h2 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h2>
         <p className="mt-1 text-sm text-muted-foreground">INAI will alert nearby support and keep guiding you.</p>
 
         <div className="mt-4 grid grid-cols-[1fr_8rem] items-center gap-2">
@@ -959,7 +959,7 @@ export function PrivacyScreen() {
     <PageFrame>
       <ScreenHeader title="Privacy & Data" subtitle="You stay in control." icon={ShieldAlert} backTo="/settings" />
       <div className="flex-1 px-5 pb-6">
-        <h1 className="pt-2 text-2xl font-extrabold text-ink">Privacy &amp; Data</h1>
+        <h2 className="pt-2 text-2xl font-extrabold text-ink">Privacy &amp; Data</h2>
         <p className="mt-1 text-sm text-muted-foreground">Plain words about what happens to your information.</p>
         <div className="mt-4 space-y-3">
           {PRIVACY_SECTIONS.map(({ icon: Icon, title, body }) => (

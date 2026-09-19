@@ -6,7 +6,7 @@ import {
   ArrowLeft, Camera, Compass, Ear, Eye, Image as ImageIcon, Languages, MapPin, Menu, MessageCircle,
   Mic, Navigation, Repeat, Save, Send, Settings, ShieldAlert, Sparkles, ThumbsDown, ThumbsUp, Volume2, X,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/primitives";
+import { AppShell, ScreenHeader } from "@/components/layout/primitives";
 import { useSessionStore } from "@/stores/session-store";
 import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { INAIAvatar } from "@/components/inai/INAIAvatar";
@@ -31,16 +31,7 @@ function Page({ children, nav = true }: { children: ReactNode; nav?: boolean }) 
   return <AppShell nav={nav ? <BottomNavigation /> : false}><DeviceBar />{children}</AppShell>;
 }
 function Header({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
-  return (
-    <header className="flex items-start gap-2 px-5 pt-2">
-      <Button asChild variant="ghost" size="icon" className="rounded-full"><Link to="/home" aria-label="Back to home"><ArrowLeft /></Link></Button>
-      <div className="flex-1">
-        <h1 className="text-2xl font-extrabold leading-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
-      </div>
-      {right}
-    </header>
-  );
+  return <ScreenHeader title={title} subtitle={subtitle ?? "INAI accessibility support"} backTo="/home" right={right} />;
 }
 
 /** Docked INAI card used on the camera screens. */
@@ -169,6 +160,7 @@ export function LiveVisionScreen() {
   return (
     <Page nav={false}>
       <div className="flex-1 space-y-3 px-4 pb-6">
+        <h1 className="sr-only">Live Monitoring</h1>
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="icon" className="rounded-full"><Link to="/home" aria-label="Menu"><Menu /></Link></Button>
           <span className="rounded-full bg-primary-tint px-3 py-1 text-xs font-extrabold text-primary">Live Monitoring · Environment · Audio · Navigation</span>
@@ -499,6 +491,7 @@ export function GuidanceScreen() {
   return (
     <Page nav={false}>
       <div className="relative flex-1 overflow-hidden">
+        <h1 className="sr-only">Guidance Mode</h1>
         <div className="absolute inset-0 opacity-45"><CameraStage height="h-full" showControls={false} /></div>
         <div className="relative flex h-full flex-col justify-between p-4">
           <div className="flex items-start">
