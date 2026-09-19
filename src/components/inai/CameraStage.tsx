@@ -10,26 +10,44 @@ const toneChip: Record<VisionDetection["tone"], string> = {
   primary: "bg-primary text-primary-foreground", danger: "bg-danger text-destructive-foreground", warn: "bg-warn text-ink",
 };
 
-export function DetectionOverlay({ detections, frame }: { detections: VisionDetection[]; frame: { width: number; height: number } }) {
-  if (!frame.width || !frame.height) return null;
+export interface StageBox { width: number; height: number }
+
+/**
+ * Maps a detection box from video pixels to on-screen pixels.
+ *
+ * The preview is `object-cover`, so the video is scaled up and cropped. Without
+ * this the boxes drift away from what they mark.
+ */
+function coverRect(box: VisionDetection["box"], frame: StageBox, stage: StageBox) {
+  const scale = Math.max(stage.width / frame.width, stage.height / frame.height);
+  const offsetX = (stage.width - frame.width * scale) / 2;
+  const offsetY = (stage.height - frame.height * scale) / 2;
+  return {
+    left: box.x * scale + offsetX,
+    top: box.y * scale + offsetY,
+    width: box.width * scale,
+    height: box.height * scale,
+  };
+}
+
+export function DetectionOverlay({ detections, frame, stage }: { detections: VisionDetection[]; frame: StageBox; stage: StageBox }) {
+  if (!frame.width || !frame.height || !stage.width) return null;
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-      {detections.filter((d) => d.rawClass !== "pathway").map((detection) => (
-        <span
-          key={detection.id}
-          className={`detection-overlay absolute rounded-control border-[3px] ${toneClass[detection.tone]}`}
-          style={{
-            left: `${(detection.box.x / frame.width) * 100}%`,
-            top: `${(detection.box.y / frame.height) * 100}%`,
-            width: `${(detection.box.width / frame.width) * 100}%`,
-            height: `${(detection.box.height / frame.height) * 100}%`,
-          }}
-        >
-          <span className={`absolute -top-3 left-1 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${toneChip[detection.tone]}`}>
-            {detection.label} ~{Math.round(detection.approxDistance)} m
+      {detections.filter((d) => d.rawClass !== "pathway").map((detection) => {
+        const rect = coverRect(detection.box, frame, stage);
+        return (
+          <span
+            key={detection.id}
+            className={`detection-overlay absolute rounded-control border-[3px] ${toneClass[detection.tone]}`}
+            style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+          >
+            <span className={`absolute -top-3 left-1 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${toneChip[detection.tone]}`}>
+              {detection.label} ~{Math.round(detection.approxDistance)} m
+            </span>
           </span>
-        </span>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -50,42 +68,63 @@ export function ClearPathOverlay({ side }: { side: "left" | "right" | "ahead" })
 
 /** Live camera with graceful degradation: without camera access the rest of the screen still works. */
 export function CameraStage({
-  onDetections, height = "h-72", children, showControls = true, onVideoReady,
+  onDetections, onFrame, height = "h-72", children, showControls = true,
 }: {
-  onDetections?: (detections: VisionDetection[]) => void;
-  height?: string;
-  children?: ReactNode;
-  showControls?: boolean;
-  onVideoReady?: (video: HTMLVideoElement | null) => void;
+  onDetections?: (detections: VisionDetection[], frame: StageBox) => void;
+  onFrame?: (frame: StageBox) => void;
+  height?: string; children?: ReactNode; showControls?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [detections, setDetections] = useState<VisionDetection[]>([]);
   const [status, setStatus] = useState<VisionStatus>("idle");
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [frame, setFrame] = useState({ width: 0, height: 0 });
+  const [frame, setFrame] = useState<StageBox>({ width: 0, height: 0 });
+  const [stage, setStage] = useState<StageBox>({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const element = stageRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      setStage({ width: element.clientWidth, height: element.clientHeight });
+    });
+    observer.observe(element);
+    setStage({ width: element.clientWidth, height: element.clientHeight });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     const offStatus = visionService.onStatus(setStatus);
     const offDetections = visionService.onDetections((next) => {
+      const nextFrame = { width: video.videoWidth, height: video.videoHeight };
       setDetections(next);
-      setFrame({ width: video.videoWidth, height: video.videoHeight });
-      onDetections?.(next);
+      setFrame(nextFrame);
+      onFrame?.(nextFrame);
+      onDetections?.(next, nextFrame);
     });
     setFailed(false);
-    onVideoReady?.(video);
     visionService.start(video).catch(() => setFailed(true));
-    return () => { offStatus(); offDetections(); visionService.stop(); onVideoReady?.(null); };
-  }, [attempt, onDetections, onVideoReady]);
+    return () => { offStatus(); offDetections(); visionService.stop(); };
+  }, [attempt, onDetections, onFrame]);
 
   const clearSide = detections.some((d) => d.rawClass === "pathway") ? "ahead" : undefined;
 
   return (
-    <div className={`relative w-full overflow-hidden rounded-card bg-ink ${height}`}>
-      <video ref={videoRef} playsInline muted className="size-full object-cover" aria-label="Live camera view" />
-      {!failed && <DetectionOverlay detections={detections} frame={frame} />}
+    <div ref={stageRef} className={`relative w-full overflow-hidden rounded-card bg-ink ${height}`}>
+      {/* transform:none keeps the preview true to life — never a mirror image. */}
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        style={{ transform: "none" }}
+        className="size-full object-cover"
+        aria-label="Live camera view"
+      />
+      {!failed && <DetectionOverlay detections={detections} frame={frame} stage={stage} />}
       {!failed && clearSide && <ClearPathOverlay side={clearSide} />}
       {!failed && (
         <span className="absolute left-3 top-3 rounded-full bg-live px-3 py-1 text-xs font-extrabold text-primary-foreground">

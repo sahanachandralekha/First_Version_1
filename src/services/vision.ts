@@ -67,10 +67,22 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
   onStatus(listener: StatusListener) { this.statusListeners.add(listener); return () => { this.statusListeners.delete(listener); }; }
   private setStatus(status: VisionStatus) { this.status = status; this.statusListeners.forEach((listener) => listener(status)); }
 
+  /** True when the stream that opened is the selfie camera. */
+  facingUser = false;
+
   async start(video: HTMLVideoElement) {
     this.setStatus("requesting-camera");
-    this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+    // The rear camera shows the world the right way round. Only fall back to the
+    // front camera when no rear camera exists, and never flip the preview.
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
+      this.facingUser = false;
+    } catch {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      this.facingUser = true;
+    }
     video.srcObject = this.stream;
+    video.style.transform = "none";
     await video.play();
     this.setStatus("loading-model");
     const [{ load }] = await Promise.all([import("@tensorflow-models/coco-ssd"), import("@tensorflow/tfjs")]);

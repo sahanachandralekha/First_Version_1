@@ -24,7 +24,10 @@ import { eventBus, type NormalizedEvent } from "@/services/events";
 import { audioEventService, microphoneUnavailableError, type SoundEvent } from "@/services/audio-events";
 import { sttService, isSpeechRecognitionSupported, unsupportedSpeechError } from "@/services/stt";
 import type { VisionDetection } from "@/services/vision";
-import { understandScene, summarizeTranscript, inaiChat, describeScene } from "@/lib/inai/ai.functions";
+import { readScene } from "@/services/scene-guidance";
+import { hapticService } from "@/services/haptics";
+import { sttMessages, type SttProblem } from "@/services/stt";
+import { understandScene, summarizeTranscript, inaiChat } from "@/lib/inai/ai.functions";
 
 function DeviceBar() { return <div aria-hidden="true" className="flex h-9 shrink-0 items-center justify-between px-6 text-xs font-extrabold"><span>9:41</span><span>▮▮▮ ◉ ▰</span></div>; }
 function Page({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
@@ -84,65 +87,57 @@ export function VisionScreen() {
   const { speak, speaking, mouthOpenness } = useINAIVoice();
   const profile = useAccessibilityStore((state) => state.profile);
   const [detections, setDetections] = useState<VisionDetection[]>([]);
+  const [frameWidth, setFrameWidth] = useState(0);
   const [line, setLine] = useState("I'm looking around for you.");
   const [tip, setTip] = useState(true);
   const [describing, setDescribing] = useState(false);
   const understand = useServerFn(understandScene);
-  const describe = useServerFn(describeScene);
-  const lastAsk = useRef(0);
-  const videoEl = useRef<HTMLVideoElement | null>(null);
+  const navigate = useNavigate();
+  const spokenKey = useRef("");
+  const spokenAt = useRef(0);
   const { caption, critical } = useDirectiveRouter();
 
-  const handleDetections = useCallback((next: VisionDetection[]) => setDetections(next), []);
-  const handleVideo = useCallback((video: HTMLVideoElement | null) => { videoEl.current = video; }, []);
+  const handleDetections = useCallback((next: VisionDetection[], frame: { width: number; height: number }) => {
+    setDetections(next);
+    setFrameWidth(frame.width);
+  }, []);
 
-  /** Sends exactly one frame, and only when the person asks for it. */
-  const describeNow = useCallback(async () => {
-    const video = videoEl.current;
-    if (!video || !video.videoWidth || describing) return;
+  // Plain-English reading of what the camera actually sees. Spoken only when the
+  // situation changes, and never more than once every five seconds.
+  useEffect(() => {
+    if (!frameWidth) return;
+    const reading = readScene(detections, frameWidth);
+    setLine(reading.message);
+    const now = Date.now();
+    if (reading.key === spokenKey.current || now - spokenAt.current < 5000) return;
+    spokenKey.current = reading.key;
+    spokenAt.current = now;
+    void speak(reading.message, reading.clear ? "guidance" : "alert");
+  }, [detections, frameWidth, speak]);
+
+  const describeMore = async () => {
+    if (describing) return;
     setDescribing(true);
-    setLine("Looking at what's in front of you…");
     try {
-      const canvas = document.createElement("canvas");
-      const scale = Math.min(1, 768 / video.videoWidth);
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const image = canvas.toDataURL("image/jpeg", 0.7);
-      const result = await describe({ data: { image, profile } });
-      setLine(result.description);
-      void speak(result.description, "guidance");
+      const result = await understand({ data: {
+        detections: detections.map((d) => ({ label: d.label, approxDistance: d.approxDistance, confidence: d.confidence })),
+        profile, lastGuidance: line,
+      } });
+      const message = result.summary || result.guidance;
+      if (message) { setLine(message); void speak(message, "guidance"); }
     } catch {
-      setLine("I couldn't describe that just now. Please try again in a moment.");
+      useSessionStore.getState().setServiceHealth("ai", "offline");
     } finally {
       setDescribing(false);
     }
-  }, [describe, describing, profile, speak]);
+  };
 
-  useEffect(() => {
-    if (!detections.length) return;
-    const now = Date.now();
-    if (now - lastAsk.current < 6000) return;
-    lastAsk.current = now;
-    void understand({ data: {
-      detections: detections.map((d) => ({ label: d.label, approxDistance: d.approxDistance, confidence: d.confidence })),
-      profile, lastGuidance: line,
-    } })
-      .then((result) => {
-        const message = result.guidance || result.summary;
-        if (!message) return;
-        setLine(message);
-        void speak(message, result.priority === "critical" ? "emergency" : "guidance");
-      })
-      .catch(() => undefined);
-  }, [detections, profile, understand, speak, line]);
-
-  const chips = detections.slice(0, 3);
+  const chips = detections.filter((d) => d.rawClass !== "pathway").slice(0, 3);
   return (
     <Page>
       <Header title="AI Vision" subtitle="INAI describes what is in front of you." />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
-        <CameraStage onDetections={handleDetections} onVideoReady={handleVideo} />
+        <CameraStage onDetections={handleDetections} />
         <DockedINAI line={line} speaking={speaking} mouth={mouthOpenness} />
         <div className="grid grid-cols-3 gap-2">
           {(chips.length ? chips : [{ id: "wait", label: "Looking", approxDistance: 0 } as VisionDetection]).map((chip) => (
@@ -153,9 +148,9 @@ export function VisionScreen() {
           ))}
         </div>
         <ActionRow actions={[
-          [<Eye key="d" className="size-5" />, describing ? "Describing…" : "Describe this scene", () => { void describeNow(); }],
-          [<Navigation key="n" className="size-5" />, "Navigation", undefined],
-          [<Camera key="p" className="size-5" />, "Take Photo", undefined],
+          [<Eye key="d" className="size-5" />, describing ? "Describing…" : "Describe More", () => void describeMore()],
+          [<Volume2 key="r" className="size-5" />, "Say it again", () => void speak(line, "guidance")],
+          [<Navigation key="n" className="size-5" />, "Guidance", () => void navigate({ to: "/guidance" })],
         ]} />
         {tip && (
           <div className="flex items-center gap-2 rounded-control bg-primary-tint px-3 py-2 text-sm font-semibold text-primary">
@@ -249,22 +244,51 @@ const seededSounds: SoundEvent[] = [
   { id: "seed-horn", soundClass: "horn", label: "Vehicle", confidence: 0.6, direction: "right", distance: 12, mock: true, ts: Date.now() },
 ];
 
+/** One alert every 20 seconds — never faster, and never two timers at once. */
+const ALERT_INTERVAL_MS = 20000;
+
 export function SoundScreen() {
   const { speak, speaking, mouthOpenness } = useINAIVoice();
   const [events, setEvents] = useState<SoundEvent[]>(seededSounds);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [lastAlertAt, setLastAlertAt] = useState<number | null>(null);
+  const [canVibrate, setCanVibrate] = useState(false);
   const { caption, critical } = useDirectiveRouter();
+  const latest = useRef<SoundEvent | undefined>(seededSounds[0]);
   const active = events[0];
-  const quote = active ? `A ${active.label.toLowerCase()} is coming from your ${active.direction}. It's about ${active.distance} metres away. Please be aware.` : "I'm listening for important sounds around you.";
+  const quote = active
+    ? `A ${active.label.toLowerCase()} is coming from your ${active.direction}. It's about ${active.distance} metres away. Please be aware.`
+    : "I'm listening for important sounds around you.";
+
+  useEffect(() => { setCanVibrate(typeof navigator !== "undefined" && typeof navigator.vibrate === "function"); }, []);
 
   useEffect(() => {
-    const off = audioEventService.subscribe((event) => setEvents((current) => [event, ...current].slice(0, 4)));
+    const off = audioEventService.subscribe((event) => {
+      latest.current = event;
+      setEvents((current) => [event, ...current].slice(0, 4));
+    });
     audioEventService.start().catch(() => setFailed(true));
     return () => { off(); audioEventService.stop(); };
   }, [attempt]);
 
-  useEffect(() => { void speak(quote, "alert"); }, [quote, speak]);
+  // Single alert scheduler: speaks and vibrates now, then once every 20 seconds.
+  // Cleared on leaving the screen so no timer can ever be left running.
+  useEffect(() => {
+    let cancelled = false;
+    const fire = () => {
+      if (cancelled) return;
+      const event = latest.current;
+      if (!event) return;
+      const line = `A ${event.label.toLowerCase()} is coming from your ${event.direction}. It's about ${event.distance} metres away. Please be aware.`;
+      setLastAlertAt(Date.now());
+      hapticService.pulse(event.soundClass === "siren" ? "critical" : "warn");
+      void speak(line, "alert");
+    };
+    fire();
+    const timer = window.setInterval(fire, ALERT_INTERVAL_MS);
+    return () => { cancelled = true; window.clearInterval(timer); hapticService.stop(); };
+  }, [speak]);
 
   return (
     <Page>
@@ -275,30 +299,37 @@ export function SoundScreen() {
         </span>} />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-4">
         {failed ? <ErrorState {...microphoneUnavailableError} onRetry={() => { setFailed(false); setAttempt((v) => v + 1); }} />
-          : <SoundRadar events={events} active={active} />}
+          : (
+            <div className="mx-auto w-full max-w-sm">
+              <SoundRadar events={events} active={active} />
+            </div>
+          )}
         <section className="rounded-card border border-line bg-background p-4 shadow-inai">
           <p className="text-xs font-extrabold uppercase text-muted-foreground">INAI heard something</p>
           <p className="mt-1 text-lg font-extrabold">{active?.label ?? "Nothing important yet"}</p>
           <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             Direction: {active?.direction ?? "—"} | Distance: Approx. {active?.distance ?? "—"} m <ModeBadge mode="MOCK" />
           </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Alerts repeat once every 20 seconds{canVibrate ? ", with a vibration each time." : ". This device does not support vibration, so alerts are sound and text only."}
+            {lastAlertAt && <> Last alert at {new Date(lastAlertAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}.</>}
+          </p>
         </section>
-        <section className="grid grid-cols-[6rem_1fr] items-center gap-2 rounded-card bg-primary-tint p-3">
+        <section className="grid grid-cols-[4.5rem_1fr] items-center gap-3 rounded-card bg-primary-tint p-4 sm:grid-cols-[6rem_1fr]">
           <INAIAvatar state={speaking ? "speaking" : "guiding"} gesture="point_left" mouthOpenness={mouthOpenness} size="xs" />
-          <div>
-            <p className="text-sm font-semibold text-primary">{quote}</p>
-            <Button variant="ghost" className="mt-1 h-9 px-2 text-primary" onClick={() => void speak(quote, "alert")}><Volume2 className="size-4" />Replay</Button>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-relaxed text-primary">{quote}</p>
+            <Button variant="ghost" className="mt-1 h-10 px-2 text-primary" onClick={() => void speak(quote, "alert")}><Volume2 className="size-4" />Replay</Button>
           </div>
         </section>
         <section>
           <h2 className="text-sm font-extrabold uppercase text-muted-foreground">What you can do</h2>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {["Move left slowly", "Check your surroundings", "Wait if needed", "Tell me more"].map((action) => (
-              <Button key={action} variant="outline" className="h-auto min-h-14 rounded-card text-sm font-bold">{action}</Button>
+              <Button key={action} variant="outline" className="h-auto min-h-14 whitespace-normal rounded-card text-sm font-bold">{action}</Button>
             ))}
           </div>
         </section>
-        <Button variant="link" className="w-full">Show All Detected Sounds</Button>
         <CaptionRegion message={caption} critical={critical} />
       </div>
     </Page>
@@ -312,49 +343,70 @@ export function TranscribeScreen() {
   const [supported, setSupported] = useState(true);
   useEffect(() => { setSupported(isSpeechRecognitionSupported()); }, []);
   const language = useAccessibilityStore((state) => state.prefs.language);
-  const [finalText, setFinalText] = useState("");
+  const [lines, setLines] = useState<string[]>([]);
   const [interim, setInterim] = useState("");
+  const [listening, setListening] = useState(false);
+  const [problem, setProblem] = useState<SttProblem | null>(null);
   const [meaning, setMeaning] = useState<{ chip: string; explanation: string } | null>(null);
   const summarize = useServerFn(summarizeTranscript);
+  const lastFinal = useRef("");
 
+  useEffect(() => { sttService.language = language; }, [language]);
+
+  // Subscriptions live for the whole screen; listening itself is user-controlled.
   useEffect(() => {
-    if (!supported) return;
-    sttService.language = language;
-    const off = sttService.subscribe((text, isFinal) => {
-      if (isFinal) { setFinalText(text); setInterim(""); } else setInterim(text);
+    const offResult = sttService.subscribe((text, isFinal) => {
+      if (!isFinal) { setInterim(text); return; }
+      setInterim("");
+      if (!text || text === lastFinal.current) return; // no duplicate entries
+      lastFinal.current = text;
+      setLines((current) => [...current, text].slice(-30));
     });
-    sttService.start().catch(() => undefined);
-    return () => { off(); sttService.stop(); };
-  }, [supported, language]);
+    const offError = sttService.onError(setProblem);
+    const offState = sttService.onStateChange(setListening);
+    return () => { offResult(); offError(); offState(); sttService.stop(); };
+  }, []);
 
+  const latest = lines[lines.length - 1] ?? "";
   useEffect(() => {
-    if (!finalText) return;
-    void summarize({ data: { transcript: finalText } }).then(setMeaning).catch(() => { useSessionStore.getState().setServiceHealth("ai", "offline"); });
-  }, [finalText, summarize]);
+    if (!latest) return;
+    void summarize({ data: { transcript: latest } }).then(setMeaning).catch(() => { useSessionStore.getState().setServiceHealth("ai", "offline"); });
+  }, [latest, summarize]);
+
+  const toggle = () => {
+    if (listening) { sttService.stop(); return; }
+    setProblem(null);
+    sttService.start().catch(() => undefined);
+  };
 
   return (
     <Page>
       <Header title="Live Transcription" subtitle="INAI turns nearby speech into text you can read." />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
-        {!supported ? <ErrorState {...unsupportedSpeechError} /> : (
-          <div className="relative overflow-hidden rounded-card bg-ink">
-            <CameraStage height="h-44" showControls={false}>
-              <span className="absolute left-3 top-12 rounded-full bg-background/90 px-2 py-1 text-[11px] font-bold">Person Speaking</span>
-              <span className="absolute right-3 top-3 rounded-full bg-hearing px-3 py-1 text-xs font-extrabold text-primary-foreground">Listening…</span>
-              <span className="absolute bottom-3 left-3 rounded-full bg-background/90 px-2 py-1 text-[11px] font-bold">1 person detected</span>
-              <span className="absolute bottom-3 right-3 rounded-full bg-background/90 px-2 py-1 text-[11px] font-bold">Location: Main Corridor</span>
-            </CameraStage>
-          </div>
+        {!supported && <ErrorState {...unsupportedSpeechError} />}
+        {supported && problem && (
+          <ErrorState {...sttMessages[problem]} onRetry={() => { setProblem(null); sttService.start().catch(() => undefined); }} />
         )}
         <section className="rounded-card border border-line bg-background p-4 shadow-inai">
-          <p className="flex items-center gap-2 text-xs font-extrabold uppercase text-muted-foreground">
-            Live Transcription <span className="rounded-full bg-live/15 px-2 text-live">In real time</span> <span className="rounded-full bg-primary-tint px-2 text-primary">Auto detect</span>
+          <p className="flex flex-wrap items-center gap-2 text-xs font-extrabold uppercase text-muted-foreground">
+            Live Transcription
+            <span className={`rounded-full px-2 py-0.5 ${listening ? "bg-live/15 text-live" : "bg-canvas text-muted-foreground"}`}>
+              {listening ? "● Listening" : "Not listening"}
+            </span>
           </p>
-          <p className="mt-3 text-[26px] font-extrabold leading-snug">
-            {finalText ? `“${finalText}”` : <span className="text-muted-foreground">Waiting for someone to speak…</span>}
-            {interim && <span className="opacity-60"> {interim}</span>}
-          </p>
-          <p className="mt-3 text-xs text-muted-foreground">Speaker: Unknown · Just now</p>
+          <div className="mt-3 max-h-64 space-y-2 overflow-y-auto" aria-live="polite">
+            {lines.length === 0 && !interim && (
+              <p className="text-base text-muted-foreground">
+                {listening ? "Listening… speak, or hold the phone toward the person talking." : "Tap Start listening to turn nearby speech into text."}
+              </p>
+            )}
+            {lines.map((text, index) => (
+              <p key={`${index}-${text.slice(0, 12)}`} className={index === lines.length - 1 ? "text-xl font-extrabold leading-snug" : "text-base text-muted-foreground"}>
+                {text}
+              </p>
+            ))}
+            {interim && <p className="text-xl font-extrabold leading-snug opacity-60">{interim}</p>}
+          </div>
         </section>
         {meaning?.chip && (
           <section className="rounded-card bg-primary-tint p-4">
@@ -363,14 +415,15 @@ export function TranscribeScreen() {
             <p className="mt-2 text-sm font-semibold text-primary">{meaning.explanation}</p>
           </section>
         )}
-        <div className="grid grid-cols-2 gap-2">
-          {[[Save, "Save Note"], [MapPin, "Show on Map"], [Repeat, "Repeat"], [Languages, "Translate"]].map(([Icon, label]) => {
-            const Glyph = Icon as typeof Save;
-            return <Button key={String(label)} variant="outline" className="h-auto min-h-14 rounded-card text-sm font-bold"><Glyph className="size-4" />{String(label)}</Button>;
-          })}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button className="min-h-14 w-full rounded-full text-base font-extrabold" disabled={!supported} onClick={toggle} aria-pressed={listening}>
+            <Mic className="size-5" />{listening ? "Stop listening" : "Start listening"}
+          </Button>
+          <Button variant="outline" className="min-h-14 w-full rounded-full text-base font-extrabold" onClick={() => { setLines([]); setMeaning(null); lastFinal.current = ""; }}>
+            <Repeat className="size-5" />Clear text
+          </Button>
         </div>
-        <Button className="min-h-14 w-full rounded-full text-base font-extrabold">Keep Listening</Button>
-        <CaptionRegion message={finalText} />
+        <CaptionRegion message={latest} />
       </div>
     </Page>
   );

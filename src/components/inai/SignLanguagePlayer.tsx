@@ -42,19 +42,11 @@ export function SignLanguagePlayer({ phrase, autoPlay = false }: { phrase: SignP
           <p className="text-xs text-muted-foreground">{current?.description}</p>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex items-center gap-2">
         <Button variant="outline" className="rounded-full" onClick={() => setPlaying((value) => !value)}>
           {playing ? <Pause /> : <Play />}{playing ? "Pause" : "Play sign"}
         </Button>
-        <a
-          href={phrase.reference.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex min-h-11 items-center gap-1 rounded-full border border-line px-4 text-sm font-semibold text-primary"
-        >
-          Watch the real sign
-        </a>
-        <p className="flex items-center gap-1 text-xs text-muted-foreground"><ShieldCheck className="size-3" />{phrase.reference.label}</p>
+        <p className="flex items-center gap-1 text-xs text-muted-foreground"><ShieldCheck className="size-3" />Awaiting expert review</p>
       </div>
     </section>
   );
