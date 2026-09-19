@@ -16,6 +16,9 @@ import { BrowserTTSService } from "@/services/tts";
 import { hapticService } from "@/services/haptics";
 import { signService, SIGN_SOURCE, type SignPhrase } from "@/services/sign-language";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { sendSosEmail } from "@/lib/inai/sos.functions";
+import { useEmergencyStore } from "@/stores/emergency-store";
 
 const tts = new BrowserTTSService();
 const footer = <p className="py-5 text-center text-[10px] font-bold uppercase tracking-[.25em] text-muted-foreground">People · Access · Opportunities · Together</p>;
@@ -785,6 +788,43 @@ export function EmergencyScreen() {
   const lastSpoken = useRef(0);
   const profile = useAccessibilityStore((s) => s.profile);
   const showToast = (message: string) => { setToast(message); window.setTimeout(() => setToast(null), 2600); };
+  const contactEmail = useEmergencyStore((s) => s.contactEmail);
+  const contactName = useEmergencyStore((s) => s.contactName);
+  const setContactEmail = useEmergencyStore((s) => s.setContactEmail);
+  const setContactName = useEmergencyStore((s) => s.setContactName);
+  const [draftEmail, setDraftEmail] = useState(contactEmail);
+  const [draftName, setDraftName] = useState(contactName);
+  const [saved, setSaved] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{ state: "idle" | "sending" | "sent" | "error"; message: string }>({ state: "idle", message: "" });
+  const sendSos = useServerFn(sendSosEmail);
+
+  // Real email dispatch. Location is attached only when the device actually gives it.
+  const sendAlert = useCallback(async () => {
+    const to = useEmergencyStore.getState().contactEmail.trim();
+    if (!to) {
+      setEmailStatus({ state: "error", message: "Add a security email address above and save it, then hold the button again." });
+      return;
+    }
+    setEmailStatus({ state: "sending", message: "Sending the SOS alert…" });
+    const position = await new Promise<GeolocationPosition | null>((resolve) => {
+      if (!("geolocation" in navigator)) { resolve(null); return; }
+      navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { timeout: 8000, enableHighAccuracy: true });
+    });
+    try {
+      await sendSos({ data: {
+        to,
+        name: useEmergencyStore.getState().contactName,
+        latitude: position?.coords.latitude ?? null,
+        longitude: position?.coords.longitude ?? null,
+        accuracy: position?.coords.accuracy ?? null,
+        note: "",
+      } });
+      setEmailStatus({ state: "sent", message: position ? "SOS alert sent successfully, with your location." : "SOS alert sent successfully. Your location could not be obtained." });
+    } catch (error) {
+      console.error("SOS email failed", error);
+      setEmailStatus({ state: "error", message: "Unable to send the SOS alert. Please check your connection and try again." });
+    }
+  }, [sendSos]);
 
   const clearHold = useCallback(() => {
     if (tick.current) window.clearInterval(tick.current);
@@ -810,7 +850,8 @@ export function EmergencyScreen() {
         is_simulated: true,
       });
     })();
-  }, [clearHold]);
+    void sendAlert();
+  }, [clearHold, sendAlert]);
 
   const startHold = useCallback(() => {
     if (activated || holding) return;
@@ -863,6 +904,37 @@ export function EmergencyScreen() {
           </div>
           <INAIAvatar state="emergency" size="xs" />
         </div>
+
+        <form
+          className="mt-4 rounded-card border border-line bg-background p-4 shadow-inai"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setContactEmail(draftEmail.trim());
+            setContactName(draftName.trim());
+            setSaved(true);
+            showToast("Emergency contact saved");
+          }}
+        >
+          <h2 className="text-sm font-extrabold uppercase text-muted-foreground">Who should we email?</h2>
+          <label className="mt-2 block text-sm font-semibold text-ink" htmlFor="sos-email">Security email address</label>
+          <input
+            id="sos-email" type="email" inputMode="email" autoComplete="email" required
+            value={draftEmail} onChange={(event) => { setDraftEmail(event.target.value); setSaved(false); }}
+            placeholder="security@yourcampus.edu"
+            className="mt-1 min-h-12 w-full rounded-control border border-line bg-canvas px-3 text-base text-ink"
+          />
+          <label className="mt-3 block text-sm font-semibold text-ink" htmlFor="sos-name">Your name (optional)</label>
+          <input
+            id="sos-name" type="text" autoComplete="name"
+            value={draftName} onChange={(event) => { setDraftName(event.target.value); setSaved(false); }}
+            placeholder="So they know who needs help"
+            className="mt-1 min-h-12 w-full rounded-control border border-line bg-canvas px-3 text-base text-ink"
+          />
+          <Button type="submit" variant="outline" className="mt-3 min-h-12 w-full rounded-full font-extrabold">Save contact</Button>
+          <p role="status" className="mt-2 text-xs text-muted-foreground">
+            {saved || contactEmail ? `Alerts will be emailed to ${contactEmail || draftEmail}.` : "Add an address so the SOS alert can actually be sent."}
+          </p>
+        </form>
 
         {!activated ? (
           <div className="mt-6 flex flex-col items-center">
