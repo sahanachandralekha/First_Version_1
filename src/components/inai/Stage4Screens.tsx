@@ -263,13 +263,22 @@ export function CommunicateScreen() {
 // ---------------------------------------------------------------- Screen 12
 
 function StepThumb({ phrase, order, failed, onFail }: { phrase: SignPhrase; order: number; failed: boolean; onFail: () => void }) {
+  const ref = useRef<HTMLImageElement | null>(null);
   const step = phrase.steps[order - 1];
+  useEffect(() => {
+    const img = ref.current;
+    if (!img) return;
+    const check = () => { if (img.naturalWidth === 0) onFail(); };
+    if (img.complete) check();
+    else { img.addEventListener("error", check); img.addEventListener("load", check); }
+    return () => { img.removeEventListener("error", check); img.removeEventListener("load", check); };
+  }, [onFail, phrase.id, order]);
   if (failed || !step) return <HeartHandshake aria-hidden="true" className="mx-auto size-14 text-primary" />;
   return (
     <img
+      ref={ref}
       src={step.assetUrl}
       alt={`Step ${order} illustration: ${step.description}`}
-      onError={onFail}
       className="mx-auto size-20 object-contain"
     />
   );
