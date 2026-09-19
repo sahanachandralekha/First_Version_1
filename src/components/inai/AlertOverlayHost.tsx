@@ -75,8 +75,7 @@ export function AlertOverlayHost() {
       <div className="flex flex-1 flex-col items-center gap-4 px-6 pb-4 pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
         <motion.span
           className="grid size-20 place-items-center rounded-full bg-destructive-foreground/15"
-          animate={reducedMotion ? undefined : { scale: [1, 1.08, 1] }}
-          transition={reducedMotion ? undefined : { duration: 1.1, repeat: Infinity }}
+          {...(reducedMotion ? {} : { animate: { scale: [1, 1.08, 1] }, transition: { duration: 1.1, repeat: Infinity } })}
           aria-hidden="true"
         >
           <AlertTriangle className="size-12" />
