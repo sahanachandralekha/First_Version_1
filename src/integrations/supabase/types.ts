@@ -175,6 +175,7 @@ export type Database = {
       }
       quick_phrase_stats: {
         Row: {
+          favourite: boolean
           id: string
           last_used: string
           phrase: string
@@ -182,6 +183,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          favourite?: boolean
           id?: string
           last_used?: string
           phrase: string
@@ -189,6 +191,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          favourite?: boolean
           id?: string
           last_used?: string
           phrase?: string
