@@ -92,6 +92,7 @@ export function VisionScreen() {
   const [tip, setTip] = useState(true);
   const [describing, setDescribing] = useState(false);
   const understand = useServerFn(understandScene);
+  const navigate = useNavigate();
   const spokenKey = useRef("");
   const spokenAt = useRef(0);
   const { caption, critical } = useDirectiveRouter();
@@ -149,7 +150,7 @@ export function VisionScreen() {
         <ActionRow actions={[
           [<Eye key="d" className="size-5" />, describing ? "Describing…" : "Describe More", () => void describeMore()],
           [<Volume2 key="r" className="size-5" />, "Say it again", () => void speak(line, "guidance")],
-          [<Navigation key="n" className="size-5" />, "Guidance", () => void navigateTo("/guidance")],
+          [<Navigation key="n" className="size-5" />, "Guidance", () => void navigate({ to: "/guidance" })],
         ]} />
         {tip && (
           <div className="flex items-center gap-2 rounded-control bg-primary-tint px-3 py-2 text-sm font-semibold text-primary">
