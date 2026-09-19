@@ -273,7 +273,7 @@ function StepThumb({ phrase, order, failed, onFail }: { phrase: SignPhrase; orde
     else { img.addEventListener("error", check); img.addEventListener("load", check); }
     return () => { img.removeEventListener("error", check); img.removeEventListener("load", check); };
   }, [onFail, phrase.id, order]);
-  if (failed || !step) return <HeartHandshake aria-hidden="true" className="mx-auto size-14 text-primary" />;
+  if (failed || !step?.assetUrl) return <HeartHandshake aria-hidden="true" className="mx-auto size-14 text-primary" />;
   return (
     <img
       ref={ref}
