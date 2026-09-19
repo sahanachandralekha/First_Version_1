@@ -793,7 +793,7 @@ export function EmergencyScreen() {
     <PageFrame nav>
       <ScreenHeader title="Emergency Mode" subtitle="You’re not alone. INAI is with you." icon={Siren} backTo="/home" />
       <main className="flex-1 px-5 pb-6">
-        <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech">
+        <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech-foreground">
           SIMULATED — this prototype does not contact real emergency services.
         </div>
 
