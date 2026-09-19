@@ -882,7 +882,7 @@ export function EmergencyScreen() {
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <ol className="space-y-3">
-              {TIMELINE.map((entry, index) => (
+              {timeline.map((entry, index) => (
                 <li key={entry.label} className={`flex items-start gap-3 rounded-control border p-3 transition ${index < revealed ? "border-hearing/40 bg-hearing-tint" : "border-line opacity-50"}`}>
                   <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${index < revealed ? "bg-hearing text-primary-foreground" : "bg-canvas text-muted-foreground"}`}>
                     <Check className="size-4" />
