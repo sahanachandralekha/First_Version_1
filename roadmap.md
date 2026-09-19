@@ -29,3 +29,15 @@
 - [x] Build every adaptive home preview, live 250ms reordering, profile-aware status copy, event history, and developer need toggles.
 - [x] Complete Profile and Settings, including immediate preference saving and the service-mode disclosure sheet.
 - [x] Verify Stage 2 routes, keyboard behavior, live adaptation, cloud reads/writes, mobile layout, and preview health.
+
+## Stage 5 of 5 — POLISH, AUDIT AND DEMO READINESS
+- [ ] Unify every active INAI appearance through INAIAvatar and document the pose used on each screen.
+- [ ] Consolidate headers, status indicators, controls, spacing, colors, typography, captions, and motion behavior.
+- [ ] Fix accessibility findings across landmarks, headings, labels, focus, targets, contrast, text scaling, reduced motion, and sign descriptions.
+- [ ] Verify responsive layouts at 320, 360, 390, and 430 px, tablet, desktop, and camera landscape.
+- [ ] Finish performance cleanup for lazy loading, asset preloading, route cleanup, media release, TTS cancellation, and hidden loops.
+- [ ] Complete loading, empty, error, permission-denied, degraded, and activating states across active screens.
+- [ ] Complete honesty labels and the real/mock/future disclosure.
+- [ ] Verify all routes, seven profile combinations, adaptive navigation/dashboard behavior, alerts, persistence, and media cleanup.
+- [ ] Finish Settings-gated Demo Mode with sequence, manual recovery triggers, reset, and visible demo controls.
+- [ ] Replace the generic README with the one-page INAI architecture and service-mode guide.
