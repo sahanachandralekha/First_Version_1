@@ -24,7 +24,7 @@ import { eventBus, type NormalizedEvent } from "@/services/events";
 import { audioEventService, microphoneUnavailableError, type SoundEvent } from "@/services/audio-events";
 import { sttService, isSpeechRecognitionSupported, unsupportedSpeechError } from "@/services/stt";
 import type { VisionDetection } from "@/services/vision";
-import { understandScene, summarizeTranscript, inaiChat } from "@/lib/inai/ai.functions";
+import { understandScene, summarizeTranscript, inaiChat, describeScene } from "@/lib/inai/ai.functions";
 
 function DeviceBar() { return <div aria-hidden="true" className="flex h-9 shrink-0 items-center justify-between px-6 text-xs font-extrabold"><span>9:41</span><span>▮▮▮ ◉ ▰</span></div>; }
 function Page({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
