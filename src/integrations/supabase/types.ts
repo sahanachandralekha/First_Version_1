@@ -105,6 +105,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_simulated: boolean
           kind: string
           payload: Json
           user_id: string
@@ -112,6 +113,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_simulated?: boolean
           kind: string
           payload?: Json
           user_id: string
@@ -119,6 +121,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_simulated?: boolean
           kind?: string
           payload?: Json
           user_id?: string
@@ -166,6 +169,33 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      quick_phrase_stats: {
+        Row: {
+          favourite: boolean
+          id: string
+          last_used: string
+          phrase: string
+          use_count: number
+          user_id: string
+        }
+        Insert: {
+          favourite?: boolean
+          id?: string
+          last_used?: string
+          phrase: string
+          use_count?: number
+          user_id: string
+        }
+        Update: {
+          favourite?: boolean
+          id?: string
+          last_used?: string
+          phrase?: string
+          use_count?: number
           user_id?: string
         }
         Relationships: []

@@ -2,6 +2,7 @@ import type { AccessibilityProfile } from "@/stores/accessibility-store";
 import type { AssistanceDirective } from "./events";
 import { hapticStrength, visualEmphasis } from "./context-engine";
 import { ttsService } from "./tts";
+import { hapticService } from "./haptics";
 import { supabase } from "@/integrations/supabase/client";
 import { useContextStore } from "@/stores/context-store";
 import type { Json } from "@/integrations/supabase/types";
@@ -40,7 +41,11 @@ export function routeDirective(
       priority: directive.severity === "critical" ? "emergency" : directive.severity === "warn" ? "alert" : "guidance",
     }).catch(() => undefined);
   }
-  if (output.haptic !== "none" && typeof navigator !== "undefined") navigator.vibrate?.(patterns[output.haptic]);
+  if (output.haptic !== "none") {
+    // Every directive reaches at least two channels: speech/caption always, plus haptics here.
+    if (directive.severity === "critical") hapticService.pattern([200, 100, 200, 100, 200]);
+    else hapticService.pulse(directive.severity === "warn" ? "warn" : "notice");
+  }
   queueDirective(directive);
   return output;
 }

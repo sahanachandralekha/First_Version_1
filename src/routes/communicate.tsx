@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CommunicateScreen } from "@/components/inai/AppScreens";
-import { routeHead } from "@/lib/inai/route-head";
+import { Outlet } from "@tanstack/react-router";
 
-export const Route = createFileRoute("/communicate")({ head: () => routeHead("Express Yourself", "Adaptive, multimodal support from INAI."), component: CommunicateScreen });
+export const Route = createFileRoute("/communicate")({ component: () => <Outlet /> });
