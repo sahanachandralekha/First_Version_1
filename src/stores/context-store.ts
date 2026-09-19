@@ -28,3 +28,8 @@ export const useContextStore = create<ContextState>((set) => ({
   setContext: (patch) => set(patch),
   reset: () => set(initial),
 }));
+
+// Dev-only handle so the alert overlay can be exercised without live sensors.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { __inaiContext?: unknown }).__inaiContext = useContextStore;
+}
