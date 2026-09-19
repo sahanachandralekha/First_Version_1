@@ -14,7 +14,7 @@ const profileSchema = z.object({ visual: z.boolean(), hearing: z.boolean(), spee
  * Reasoning models run long, so the gateway call always streams and the text is
  * accumulated server-side — these features only need the finished sentence.
  */
-async function callGateway(system: string, user: string) {
+async function callGateway(system: string, user: unknown) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("AI is not configured.");
   const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
@@ -81,7 +81,7 @@ export const understandScene = createServerFn({ method: "POST" })
     const fallback = { summary: "", priority: "info", guidance: "", hazards: [] as string[] };
     const listed = data.detections.map((d) => `${d.label}${d.approxDistance ? ` ~${Math.round(d.approxDistance)} m` : ""}`).join(", ") || "nothing recognised";
     const raw = await callGateway(
-      "You help a person with visual, hearing or speech accessibility needs understand a scene. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. Keep summary and guidance under 25 words each, warm and plain.",
+      "You help a person with visual, hearing or speech accessibility needs understand what is happening around them right now. Say what the scene actually is and what is going on in it — not just a list of objects: where things are (left, ahead, right), whether anything is moving toward the person, and what that means for their next step. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. summary describes what is happening (under 30 words); guidance is the single most useful next action (under 20 words). Warm, plain, spoken language.",
       `Detections: ${listed}\nProfile: visual=${data.profile.visual}, hearing=${data.profile.hearing}, speech=${data.profile.speech}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
     );
     return parseJson(raw, fallback);
