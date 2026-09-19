@@ -14,7 +14,7 @@ const profileSchema = z.object({ visual: z.boolean(), hearing: z.boolean(), spee
  * Reasoning models run long, so the gateway call always streams and the text is
  * accumulated server-side — these features only need the finished sentence.
  */
-async function callGateway(system: string, user: string) {
+async function callGateway(system: string, user: unknown) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("AI is not configured.");
   const response = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
@@ -81,7 +81,7 @@ export const understandScene = createServerFn({ method: "POST" })
     const fallback = { summary: "", priority: "info", guidance: "", hazards: [] as string[] };
     const listed = data.detections.map((d) => `${d.label}${d.approxDistance ? ` ~${Math.round(d.approxDistance)} m` : ""}`).join(", ") || "nothing recognised";
     const raw = await callGateway(
-      "You help a person with visual, hearing or speech accessibility needs understand a scene. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. Keep summary and guidance under 25 words each, warm and plain.",
+      "You help a person with visual, hearing or speech accessibility needs understand what is happening around them right now. Say what the scene actually is and what is going on in it — not just a list of objects: where things are (left, ahead, right), whether anything is moving toward the person, and what that means for their next step. Always describe distances as approximate. Never invent objects that are not listed. Reply ONLY with JSON: {\"summary\":string,\"priority\":\"info\"|\"notice\"|\"warn\"|\"critical\",\"guidance\":string,\"hazards\":string[]}. summary describes what is happening (under 30 words); guidance is the single most useful next action (under 20 words). Warm, plain, spoken language.",
       `Detections: ${listed}\nProfile: visual=${data.profile.visual}, hearing=${data.profile.hearing}, speech=${data.profile.speech}\nPrevious guidance: ${data.lastGuidance || "none"}${data.question ? `\nThe person asked: ${data.question}` : ""}`,
     );
     return parseJson(raw, fallback);
@@ -116,4 +116,30 @@ export const inaiChat = createServerFn({ method: "POST" })
       `${context}\n${history}\nPerson: ${data.message}`,
     );
     return { reply: reply || "I'm here with you, but I couldn't work that out just now." };
+  });
+
+/**
+ * 'describe-scene' — sends ONE camera frame to the model, only when the person
+ * asks for it, and gets back a real description of what is happening.
+ */
+export const describeScene = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    z.object({
+      image: z.string().startsWith("data:image/"),
+      profile: profileSchema,
+      question: z.string().max(300).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const text = await callGateway(
+      "You are INAI, describing a real photo to a person who may not be able to see or hear it. Say exactly what is happening in the scene: the place, the people and what they appear to be doing, objects and where they are relative to the viewer (left, ahead, right), any movement, text or signs you can read, and anything that could be a hazard. Never invent anything you cannot see. Distances are approximate. Speak in 2-4 warm, plain sentences, ending with the most useful next step if there is one.",
+      [{
+        role: "user",
+        content: [
+          { type: "input_text", text: data.question?.trim() || "Describe what is happening in front of me right now." },
+          { type: "input_image", image_url: data.image },
+        ],
+      }],
+    );
+    return { description: text || "I couldn't make out enough from that view. Let me try again in a moment." };
   });

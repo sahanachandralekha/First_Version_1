@@ -16,6 +16,8 @@ import { BrowserTTSService } from "@/services/tts";
 import { hapticService } from "@/services/haptics";
 import { signService, SIGN_SOURCE, type SignPhrase } from "@/services/sign-language";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { dispatchEmergencyAlert, saveSecurityEmail, type DispatchResult } from "@/lib/inai/emergency.functions";
 
 const tts = new BrowserTTSService();
 const footer = <p className="py-5 text-center text-[10px] font-bold uppercase tracking-[.25em] text-muted-foreground">People · Access · Opportunities · Together</p>;
@@ -374,10 +376,19 @@ export function SignScreen() {
         </div>
 
         <div className="mt-5 rounded-card border border-line bg-background p-4 shadow-inai">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {phrase.category === "emergency" && <Cross aria-hidden="true" className="size-5 text-speech" />}
             <h3 className="text-lg font-extrabold text-ink">{phrase.text}</h3>
+            <a
+              href={phrase.reference.url}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto inline-flex min-h-11 items-center rounded-full border border-primary/30 bg-primary-tint px-4 text-sm font-bold text-primary"
+            >
+              Watch the real sign
+            </a>
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">Reference: {phrase.reference.label}</p>
 
           <div className="mt-3 grid grid-cols-3 gap-3">
             {phrase.steps.map((entry, index) => (
@@ -718,12 +729,19 @@ export function MapScreen() {
 
 // ---------------------------------------------------------------- Screen 14
 
-const TIMELINE = [
-  { label: "Emergency detected", detail: "Just now" },
-  { label: "Location shared", detail: "SKCET, Main Block" },
-  { label: "Help requested", detail: "Campus security notified" },
-  { label: "INAI is guiding you", detail: "Stay calm. Help is on the way" },
-];
+const DEFAULT_LOCATION = "SKCET, Main Block";
+
+/** Asks the browser for a real position; falls back quietly when refused. */
+function getPosition(): Promise<{ latitude: number; longitude: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 30000 },
+    );
+  });
+}
 const HELP_PHRASES = ["I cannot speak", "I need medical help", "Please call my emergency contact"];
 
 export function EmergencyScreen() {
@@ -733,11 +751,30 @@ export function EmergencyScreen() {
   const [activated, setActivated] = useState(false);
   const [revealed, setRevealed] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [dispatch, setDispatch] = useState<DispatchResult | null>(null);
+  const [email, setEmail] = useState("");
+  const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const begun = useRef(0);
   const tick = useRef<number | undefined>(undefined);
   const lastSpoken = useRef(0);
   const profile = useAccessibilityStore((s) => s.profile);
+  const sendAlert = useServerFn(dispatchEmergencyAlert);
+  const saveEmail = useServerFn(saveSecurityEmail);
   const showToast = (message: string) => { setToast(message); window.setTimeout(() => setToast(null), 2600); };
+
+  const timeline = useMemo(() => [
+    { label: "Emergency detected", detail: "Just now" },
+    {
+      label: "Location shared",
+      detail: position ? `${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}` : DEFAULT_LOCATION,
+    },
+    {
+      label: dispatch?.dispatched ? "Campus security emailed" : "Campus security not reached",
+      detail: dispatch ? dispatch.reason : "Sending the alert…",
+    },
+    { label: "INAI is guiding you", detail: "Stay calm and stay where you are" },
+  ], [dispatch, position]);
 
   const clearHold = useCallback(() => {
     if (tick.current) window.clearInterval(tick.current);
@@ -750,20 +787,28 @@ export function EmergencyScreen() {
     setProgress(1);
     setActivated(true);
     setRevealed(0);
+    setDispatch(null);
     hapticService.pattern([200, 100, 200, 100, 200]);
     void tts.speak("Help has been requested. Stay where you are. You are safe, and I'm with you.", { priority: "emergency", interrupt: true });
-    TIMELINE.forEach((_, index) => window.setTimeout(() => setRevealed(index + 1), 700 * (index + 1)));
+    [0, 1, 2, 3].forEach((index) => window.setTimeout(() => setRevealed(index + 1), 700 * (index + 1)));
     void (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      await supabase.from("emergency_events").insert({
-        user_id: user.id,
-        kind: "activated",
-        payload: { location: "SKCET, Main Block", notified: ["caretakers", "campus_security", "emergency_services"] },
-        is_simulated: true,
-      });
+      const where = await getPosition();
+      setPosition(where);
+      try {
+        const result = await sendAlert({ data: {
+          location: DEFAULT_LOCATION,
+          latitude: where?.latitude ?? null,
+          longitude: where?.longitude ?? null,
+          needs: { visual: profile.visual, hearing: profile.hearing, speech: profile.speech },
+          note: "",
+        } });
+        setDispatch(result);
+        void tts.speak(result.reason, { priority: "emergency" });
+      } catch {
+        setDispatch({ dispatched: false, to: null, reason: "The alert could not be sent. Please call for help directly." });
+      }
     })();
-  }, [clearHold]);
+  }, [clearHold, profile.hearing, profile.speech, profile.visual, sendAlert]);
 
   const startHold = useCallback(() => {
     if (activated || holding) return;
@@ -796,6 +841,26 @@ export function EmergencyScreen() {
 
   useEffect(() => () => { if (tick.current) window.clearInterval(tick.current); }, []);
 
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("inai_settings").select("settings").eq("user_id", user.id).maybeSingle();
+      const stored = (data?.settings as { securityEmail?: string } | null)?.securityEmail;
+      if (stored) { setSavedEmail(stored); setEmail(stored); }
+    })();
+  }, []);
+
+  const storeEmail = async () => {
+    try {
+      const result = await saveEmail({ data: { email: email.trim() } });
+      setSavedEmail(result.email);
+      showToast(`Alerts will go to ${result.email}`);
+    } catch {
+      showToast("That address could not be saved. Please check it and try again.");
+    }
+  };
+
   const ringStyle = { strokeDashoffset: 251 * (1 - progress) };
 
   return (
@@ -803,7 +868,26 @@ export function EmergencyScreen() {
       <ScreenHeader title="Emergency Mode" subtitle="You’re not alone. INAI is with you." icon={Siren} backTo="/home" />
       <div className="flex-1 px-5 pb-6">
         <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech-foreground">
-          SIMULATED — this prototype does not contact real emergency services.
+          {savedEmail
+            ? `INAI emails ${savedEmail} when you ask for help. It cannot call emergency services for you.`
+            : "No campus security address yet — add one below so your alert reaches a real person. INAI never calls emergency services."}
+        </div>
+
+        <div className="mt-3 rounded-card border border-line bg-background p-4 shadow-inai">
+          <label htmlFor="security-email" className="text-sm font-extrabold text-ink">Campus security email</label>
+          <p className="mt-1 text-xs text-muted-foreground">This is the address your emergency alert is sent to.</p>
+          <div className="mt-2 flex gap-2">
+            <input
+              id="security-email"
+              type="email"
+              inputMode="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="security@campus.edu"
+              className="min-h-12 flex-1 rounded-control border border-line bg-canvas px-3 text-sm text-ink"
+            />
+            <Button className="min-h-12 rounded-control" disabled={!email.includes("@")} onClick={() => void storeEmail()}>Save</Button>
+          </div>
         </div>
 
         <h2 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h2>
@@ -846,7 +930,7 @@ export function EmergencyScreen() {
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <ol className="space-y-3">
-              {TIMELINE.map((entry, index) => (
+              {timeline.map((entry, index) => (
                 <li key={entry.label} className={`flex items-start gap-3 rounded-control border p-3 transition ${index < revealed ? "border-hearing/40 bg-hearing-tint" : "border-line opacity-50"}`}>
                   <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${index < revealed ? "bg-hearing text-primary-foreground" : "bg-canvas text-muted-foreground"}`}>
                     <Check className="size-4" />
@@ -868,10 +952,10 @@ export function EmergencyScreen() {
 
         <div className="mt-6 grid grid-cols-2 gap-3">
           {[
-            { icon: Bell, title: "Alert Caretakers", sub: "Family & Friends", message: "Your caretakers have been alerted. This is a simulation." },
-            { icon: Share2, title: "Share Location", sub: "Real-time GPS", message: "Your live location is being shared. This is a simulation." },
-            { icon: Home, title: "Notify Campus", sub: "Security & Staff", message: "Campus security has been notified. This is a simulation." },
-            { icon: Siren, title: "Contact Emergency", sub: "Nearby Help", message: "Nearby emergency help has been contacted. This is a simulation." },
+            { icon: Bell, title: "Alert Caretakers", sub: "Family & Friends", message: "Caretaker alerts are not set up yet. This is a simulation." },
+            { icon: Share2, title: "Share Location", sub: "Real-time GPS", message: "Your location is included in the email alert when you hold for help." },
+            { icon: Home, title: "Notify Campus", sub: "Security & Staff", message: savedEmail ? `Hold "I need help" to email ${savedEmail}.` : "Add a campus security email above so this alert is real." },
+            { icon: Siren, title: "Contact Emergency", sub: "Nearby Help", message: "INAI cannot contact emergency services. Please call them directly." },
           ].map(({ icon: Icon, title, sub, message }) => (
             <button
               key={title}

@@ -24,7 +24,7 @@ import { eventBus, type NormalizedEvent } from "@/services/events";
 import { audioEventService, microphoneUnavailableError, type SoundEvent } from "@/services/audio-events";
 import { sttService, isSpeechRecognitionSupported, unsupportedSpeechError } from "@/services/stt";
 import type { VisionDetection } from "@/services/vision";
-import { understandScene, summarizeTranscript, inaiChat } from "@/lib/inai/ai.functions";
+import { understandScene, summarizeTranscript, inaiChat, describeScene } from "@/lib/inai/ai.functions";
 
 function DeviceBar() { return <div aria-hidden="true" className="flex h-9 shrink-0 items-center justify-between px-6 text-xs font-extrabold"><span>9:41</span><span>▮▮▮ ◉ ▰</span></div>; }
 function Page({ children, nav = true }: { children: ReactNode; nav?: boolean }) {
@@ -86,11 +86,38 @@ export function VisionScreen() {
   const [detections, setDetections] = useState<VisionDetection[]>([]);
   const [line, setLine] = useState("I'm looking around for you.");
   const [tip, setTip] = useState(true);
+  const [describing, setDescribing] = useState(false);
   const understand = useServerFn(understandScene);
+  const describe = useServerFn(describeScene);
   const lastAsk = useRef(0);
+  const videoEl = useRef<HTMLVideoElement | null>(null);
   const { caption, critical } = useDirectiveRouter();
 
   const handleDetections = useCallback((next: VisionDetection[]) => setDetections(next), []);
+  const handleVideo = useCallback((video: HTMLVideoElement | null) => { videoEl.current = video; }, []);
+
+  /** Sends exactly one frame, and only when the person asks for it. */
+  const describeNow = useCallback(async () => {
+    const video = videoEl.current;
+    if (!video || !video.videoWidth || describing) return;
+    setDescribing(true);
+    setLine("Looking at what's in front of you…");
+    try {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(1, 768 / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = canvas.toDataURL("image/jpeg", 0.7);
+      const result = await describe({ data: { image, profile } });
+      setLine(result.description);
+      void speak(result.description, "guidance");
+    } catch {
+      setLine("I couldn't describe that just now. Please try again in a moment.");
+    } finally {
+      setDescribing(false);
+    }
+  }, [describe, describing, profile, speak]);
 
   useEffect(() => {
     if (!detections.length) return;
@@ -115,7 +142,7 @@ export function VisionScreen() {
     <Page>
       <Header title="AI Vision" subtitle="INAI describes what is in front of you." />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
-        <CameraStage onDetections={handleDetections} />
+        <CameraStage onDetections={handleDetections} onVideoReady={handleVideo} />
         <DockedINAI line={line} speaking={speaking} mouth={mouthOpenness} />
         <div className="grid grid-cols-3 gap-2">
           {(chips.length ? chips : [{ id: "wait", label: "Looking", approxDistance: 0 } as VisionDetection]).map((chip) => (
@@ -126,7 +153,7 @@ export function VisionScreen() {
           ))}
         </div>
         <ActionRow actions={[
-          [<Eye key="d" className="size-5" />, "Describe More", () => { lastAsk.current = 0; setDetections((value) => [...value]); }],
+          [<Eye key="d" className="size-5" />, describing ? "Describing…" : "Describe this scene", () => { void describeNow(); }],
           [<Navigation key="n" className="size-5" />, "Navigation", undefined],
           [<Camera key="p" className="size-5" />, "Take Photo", undefined],
         ]} />
