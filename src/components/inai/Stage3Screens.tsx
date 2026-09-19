@@ -123,7 +123,7 @@ export function VisionScreen() {
   return (
     <Page>
       <Header title="AI Vision" subtitle="INAI describes what is in front of you." />
-      <main className="flex-1 space-y-4 px-5 pb-24 pt-3">
+      <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
         <CameraStage onDetections={handleDetections} />
         <DockedINAI line={line} speaking={speaking} mouth={mouthOpenness} />
         <div className="grid grid-cols-3 gap-2">
@@ -146,7 +146,7 @@ export function VisionScreen() {
           </div>
         )}
         <CaptionRegion message={caption} critical={critical} />
-      </main>
+      </div>
     </Page>
   );
 }
@@ -168,7 +168,7 @@ export function LiveVisionScreen() {
 
   return (
     <Page nav={false}>
-      <main className="flex-1 space-y-3 px-4 pb-6">
+      <div className="flex-1 space-y-3 px-4 pb-6">
         <div className="flex items-center gap-2">
           <Button asChild variant="ghost" size="icon" className="rounded-full"><Link to="/home" aria-label="Menu"><Menu /></Link></Button>
           <span className="rounded-full bg-primary-tint px-3 py-1 text-xs font-extrabold text-primary">Live Monitoring · Environment · Audio · Navigation</span>
@@ -194,7 +194,7 @@ export function LiveVisionScreen() {
           <p className="mt-1 text-sm font-bold">Main corridor · exit about 80 m ahead <ModeBadge mode="MOCK" /></p>
         </section>
         <CaptionRegion message={caption} critical={critical} />
-      </main>
+      </div>
     </Page>
   );
 }
@@ -254,7 +254,7 @@ export function SoundScreen() {
           {[0, 1, 2].map((bar) => <motion.span key={bar} className="inline-block w-1 rounded bg-hearing" animate={{ height: [6, 14, 6] }} transition={{ duration: 0.9, repeat: Infinity, delay: bar * 0.15 }} />)}
           Live Listening
         </span>} />
-      <main className="flex-1 space-y-4 px-5 pb-24 pt-4">
+      <div className="flex-1 space-y-4 px-5 pb-24 pt-4">
         {failed ? <ErrorState {...microphoneUnavailableError} onRetry={() => { setFailed(false); setAttempt((v) => v + 1); }} />
           : <SoundRadar events={events} active={active} />}
         <section className="rounded-card border border-line bg-background p-4 shadow-inai">
@@ -281,7 +281,7 @@ export function SoundScreen() {
         </section>
         <Button variant="link" className="w-full">Show All Detected Sounds</Button>
         <CaptionRegion message={caption} critical={critical} />
-      </main>
+      </div>
     </Page>
   );
 }
@@ -316,7 +316,7 @@ export function TranscribeScreen() {
   return (
     <Page>
       <Header title="Live Transcription" subtitle="INAI turns nearby speech into text you can read." />
-      <main className="flex-1 space-y-4 px-5 pb-24 pt-3">
+      <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
         {!supported ? <ErrorState {...unsupportedSpeechError} /> : (
           <div className="relative overflow-hidden rounded-card bg-ink">
             <CameraStage height="h-44" showControls={false}>
@@ -352,7 +352,7 @@ export function TranscribeScreen() {
         </div>
         <Button className="min-h-14 w-full rounded-full text-base font-extrabold">Keep Listening</Button>
         <CaptionRegion message={finalText} />
-      </main>
+      </div>
     </Page>
   );
 }
@@ -431,7 +431,7 @@ export function InaiScreen() {
   return (
     <Page>
       <Header title="INAI — Your Companion" subtitle="Always by you." />
-      <main className="flex flex-1 flex-col px-5 pb-24">
+      <div className="flex flex-1 flex-col px-5 pb-24">
         <section className="mt-2 flex flex-col items-center rounded-card bg-primary-tint p-4">
           <INAIAvatar state={speaking ? "speaking" : busy ? "thinking" : "idle"} mouthOpenness={mouthOpenness} size="md" />
           <h2 className="mt-2 text-xl font-extrabold text-primary">Ask Anything. I'm Here.</h2>
@@ -476,7 +476,7 @@ export function InaiScreen() {
           <Button type="submit" size="icon" className="size-12 shrink-0 rounded-full" aria-label="Send"><Send /></Button>
         </form>
         <CaptionRegion message={caption} critical={critical} />
-      </main>
+      </div>
     </Page>
   );
 }
@@ -498,7 +498,7 @@ export function GuidanceScreen() {
 
   return (
     <Page nav={false}>
-      <main className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden">
         <div className="absolute inset-0 opacity-45"><CameraStage height="h-full" showControls={false} /></div>
         <div className="relative flex h-full flex-col justify-between p-4">
           <div className="flex items-start">
@@ -544,7 +544,7 @@ export function GuidanceScreen() {
           </div>
         </div>
         <CaptionRegion message={caption} critical={critical} />
-      </main>
+      </div>
     </Page>
   );
 }
