@@ -50,8 +50,14 @@ export function ClearPathOverlay({ side }: { side: "left" | "right" | "ahead" })
 
 /** Live camera with graceful degradation: without camera access the rest of the screen still works. */
 export function CameraStage({
-  onDetections, height = "h-72", children, showControls = true,
-}: { onDetections?: (detections: VisionDetection[]) => void; height?: string; children?: ReactNode; showControls?: boolean }) {
+  onDetections, height = "h-72", children, showControls = true, onVideoReady,
+}: {
+  onDetections?: (detections: VisionDetection[]) => void;
+  height?: string;
+  children?: ReactNode;
+  showControls?: boolean;
+  onVideoReady?: (video: HTMLVideoElement | null) => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [detections, setDetections] = useState<VisionDetection[]>([]);
   const [status, setStatus] = useState<VisionStatus>("idle");
@@ -69,9 +75,10 @@ export function CameraStage({
       onDetections?.(next);
     });
     setFailed(false);
+    onVideoReady?.(video);
     visionService.start(video).catch(() => setFailed(true));
-    return () => { offStatus(); offDetections(); visionService.stop(); };
-  }, [attempt, onDetections]);
+    return () => { offStatus(); offDetections(); visionService.stop(); onVideoReady?.(null); };
+  }, [attempt, onDetections, onVideoReady]);
 
   const clearSide = detections.some((d) => d.rawClass === "pathway") ? "ahead" : undefined;
 
