@@ -832,6 +832,26 @@ export function EmergencyScreen() {
 
   useEffect(() => () => { if (tick.current) window.clearInterval(tick.current); }, []);
 
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from("inai_settings").select("settings").eq("user_id", user.id).maybeSingle();
+      const stored = (data?.settings as { securityEmail?: string } | null)?.securityEmail;
+      if (stored) { setSavedEmail(stored); setEmail(stored); }
+    })();
+  }, []);
+
+  const storeEmail = async () => {
+    try {
+      const result = await saveEmail({ data: { email: email.trim() } });
+      setSavedEmail(result.email);
+      showToast(`Alerts will go to ${result.email}`);
+    } catch {
+      showToast("That address could not be saved. Please check it and try again.");
+    }
+  };
+
   const ringStyle = { strokeDashoffset: 251 * (1 - progress) };
 
   return (
@@ -839,7 +859,26 @@ export function EmergencyScreen() {
       <ScreenHeader title="Emergency Mode" subtitle="You’re not alone. INAI is with you." icon={Siren} backTo="/home" />
       <div className="flex-1 px-5 pb-6">
         <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech-foreground">
-          SIMULATED — this prototype does not contact real emergency services.
+          {savedEmail
+            ? `INAI emails ${savedEmail} when you ask for help. It cannot call emergency services for you.`
+            : "No campus security address yet — add one below so your alert reaches a real person. INAI never calls emergency services."}
+        </div>
+
+        <div className="mt-3 rounded-card border border-line bg-background p-4 shadow-inai">
+          <label htmlFor="security-email" className="text-sm font-extrabold text-ink">Campus security email</label>
+          <p className="mt-1 text-xs text-muted-foreground">This is the address your emergency alert is sent to.</p>
+          <div className="mt-2 flex gap-2">
+            <input
+              id="security-email"
+              type="email"
+              inputMode="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="security@campus.edu"
+              className="min-h-12 flex-1 rounded-control border border-line bg-canvas px-3 text-sm text-ink"
+            />
+            <Button className="min-h-12 rounded-control" disabled={!email.includes("@")} onClick={() => void storeEmail()}>Save</Button>
+          </div>
         </div>
 
         <h2 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h2>
