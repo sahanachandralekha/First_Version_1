@@ -122,6 +122,13 @@ function RootComponent() {
   useEffect(() => {
     void useAccessibilityStore.persist.rehydrate();
     void useSessionStore.persist.rehydrate();
+    const applyAccessibilityPreferences = () => {
+      const { textSize, contrast } = useAccessibilityStore.getState().prefs;
+      document.documentElement.dataset.textSize = textSize;
+      document.documentElement.dataset.contrast = contrast;
+    };
+    applyAccessibilityPreferences();
+    return useAccessibilityStore.subscribe(applyAccessibilityPreferences);
   }, []);
 
   return (
