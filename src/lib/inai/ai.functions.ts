@@ -134,10 +134,21 @@ export const inaiChat = createServerFn({ method: "POST" })
     }).parse(input),
   )
   .handler(async ({ data }) => {
-    const context = `Around the person right now — seen: ${data.world.detections.join(", ") || "nothing"}; heard: ${data.world.sounds.join(", ") || "nothing"}; last speech heard: ${data.world.transcript || "none"}.`;
+    const context = `What INAI's own sensors report right now — seen: ${data.world.detections.join(", ") || "nothing detected"}; heard: ${data.world.sounds.join(", ") || "nothing detected"}; last speech heard: ${data.world.transcript || "none"}.`;
     const history = data.history.map((m) => `${m.role === "user" ? "Person" : "INAI"}: ${m.content}`).join("\n");
+    const needs = [
+      data.profile.visual && "limited vision",
+      data.profile.hearing && "limited hearing",
+      data.profile.speech && "limited speech",
+    ].filter(Boolean).join(", ") || "not specified";
     const reply = await callGateway(
-      "You are INAI, a warm accessibility companion. Answer in at most three short sentences, plain language, never clinical. Distances are always approximate. Never claim to contact emergency services. Do not invent things that were not seen or heard.",
+      `You are INAI, a warm accessibility companion speaking to a person with ${needs}.
+
+Grounding rules:
+- Answer using the sensor context below when the question is about their surroundings ("what's around me", "is anything coming", "what did they say"). Quote what was actually seen or heard, with approximate distances.
+- If the sensor context does not contain the answer, say so plainly ("I can't see that from here") and suggest the concrete thing they can do (point the camera, tap Describe this scene) — never fill the gap with a plausible-sounding guess.
+- Answer general questions (what is sign language, how do I change a setting) helpfully from your own knowledge, and keep them clearly separate from what the sensors report.
+- At most three short sentences. Plain, warm, spoken language — never clinical. Distances are always approximate. Never claim to contact emergency services or anyone else.`,
       `${context}\n${history}\nPerson: ${data.message}`,
     );
     return { reply: reply || "I'm here with you, but I couldn't work that out just now." };
