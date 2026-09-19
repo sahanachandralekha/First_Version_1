@@ -5,12 +5,13 @@ export interface SignPhrase {
   validation: { status: "validated" | "unvalidated"; source?: string; reviewedBy?: string };
 }
 const source = "Prototype registry — requires review by an accredited ISL expert before production use";
-export const signPhrases: SignPhrase[] = [
+const signPhraseSeeds: Array<[string, string, string]> = [
   ["help_general", "I need help", "help"], ["medical_help", "I need medical help", "emergency"],
   ["restroom", "Where is the restroom?", "places"], ["dont_understand", "I don't understand", "conversation"],
   ["please_repeat", "Please repeat that", "conversation"], ["thank_you", "Thank you", "courtesy"],
   ["im_okay", "I'm okay", "safety"], ["please_be_patient", "Please be patient", "conversation"],
-] satisfies Array<[string, string, string]>).map(([id, text, category]) => ({ id, text, category, language: "ISL", steps: [], validation: { status: "unvalidated", source } }));
+];
+export const signPhrases: SignPhrase[] = signPhraseSeeds.map(([id, text, category]) => ({ id, text, category, language: "ISL", steps: [], validation: { status: "unvalidated", source } }));
 export interface SignService extends ServiceDescriptor { get(id: string): SignPhrase | null; demoPhrases(): SignPhrase[] }
 export class RegistrySignService implements SignService {
   readonly name = "ISL phrase playback"; readonly mode = "REAL" as const;
