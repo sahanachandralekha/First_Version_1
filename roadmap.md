@@ -7,4 +7,7 @@
 - [x] Define honest REAL, MOCK, and FUTURE service boundaries with safe fallbacks.
 - [x] Add the sprite-first INAI avatar driver, mouth frames, captions, and future driver stubs.
 - [x] Connect Lovable Cloud for later authenticated persistence and protected AI work.
-- [ ] Add the approved transparent INAI pose and mouth sprite atlas. Blocked until the exact assets are supplied.
+- [ ] Replace the foundation preview and route stubs with the complete 18-screen reference-matched experience.
+- [ ] Add the supplied transparent INAI avatar as the canonical character asset across every screen.
+- [ ] Connect onboarding, adaptive navigation, live profile changes, alerts, communication, signs, settings, emergency hold, and demo interactions.
+- [ ] Verify every screen and interaction on mobile and desktop, including reduced motion and high contrast.
