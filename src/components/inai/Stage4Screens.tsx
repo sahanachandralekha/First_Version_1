@@ -494,6 +494,10 @@ export function MapScreen() {
   const [stepIndex, setStepIndex] = useState(0);
   const [navigating, setNavigating] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [geoState, setGeoState] = useState<"idle" | "locating" | "ready" | "denied" | "unavailable">("idle");
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const watchId = useRef<number | null>(null);
+  const spokeLocation = useRef(0);
   const mapBox = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ L: typeof import("leaflet"); map: import("leaflet").Map } | null>(null);
   const layerRef = useRef<import("leaflet").LayerGroup | null>(null);
@@ -560,26 +564,53 @@ export function MapScreen() {
     layerRef.current = group;
   }, [places, filter, userPos, nearestExit, mapReady, places]);
 
+  // Real device location, kept up to date while the screen is open.
+  const startWatching = useCallback(() => {
+    if (!("geolocation" in navigator)) { setGeoState("unavailable"); setPermission("location", "unavailable"); return; }
+    if (watchId.current != null) return;
+    setGeoState("locating");
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const next = { lat: position.coords.latitude, lng: position.coords.longitude };
+        setPermission("location", "granted");
+        setGeoState("ready");
+        setAccuracy(Math.round(position.coords.accuracy));
+        setUserPos(next);
+        const map = leafletRef.current?.map;
+        if (map) { if (spokeLocation.current === 0) map.setView([next.lat, next.lng], 18); else map.panTo([next.lat, next.lng]); }
+        const now = Date.now();
+        if (now - spokeLocation.current > 20000) {
+          spokeLocation.current = now;
+          void tts.speak("Your current location is updated.", { priority: "guidance" });
+        }
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) { setGeoState("denied"); setPermission("location", "denied"); }
+        else { setGeoState("unavailable"); }
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
+    );
+  }, [setPermission]);
+
+  useEffect(() => {
+    if (permission !== "denied") startWatching();
+    return () => {
+      if (watchId.current != null) { navigator.geolocation.clearWatch(watchId.current); watchId.current = null; }
+    };
+  }, [startWatching, permission]);
+
   const locate = () => {
-    if (permission === "denied") { showToast("Location is off. Allow it in your browser settings, then try again."); return; }
-    if (permission === "prompt") { setAskPermission(true); return; }
-    requestLocation();
+    if (geoState === "denied") { showToast("Location is off. Allow it in your browser settings, then try again."); return; }
+    if (geoState === "ready") {
+      leafletRef.current?.map.setView([userPos.lat, userPos.lng], 18);
+      showToast("Centered on your location");
+      void tts.speak("Your current location is updated.", { priority: "guidance" });
+      return;
+    }
+    setAskPermission(true);
   };
 
-  const requestLocation = () => {
-    setAskPermission(false);
-    if (!("geolocation" in navigator)) { setPermission("location", "unavailable"); showToast("Location isn’t available on this device."); return; }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setPermission("location", "granted");
-        setUserPos({ lat: position.coords.latitude, lng: position.coords.longitude });
-        leafletRef.current?.map.setView([position.coords.latitude, position.coords.longitude], 18);
-        showToast("Centered on your location");
-      },
-      () => { setPermission("location", "denied"); showToast("Location is off. You can still browse campus places."); },
-      { timeout: 8000 },
-    );
-  };
+  const requestLocation = () => { setAskPermission(false); spokeLocation.current = 0; startWatching(); };
 
   const results = useMemo(() => (["exit", "restroom", "hospital"] as const).map((category) => {
     const candidates = places.filter((place) => place.category === category && place.latitude != null && place.longitude != null);
@@ -640,6 +671,14 @@ export function MapScreen() {
           </p>
         )}
 
+        <p role="status" className="mt-3 rounded-control bg-canvas p-3 text-sm font-semibold text-muted-foreground">
+          {geoState === "ready" && <>Showing your live location{accuracy != null && <> · accurate to about {accuracy} m</>}.</>}
+          {geoState === "locating" && "Finding your location…"}
+          {geoState === "denied" && "Location is off, so the map shows the campus view. Allow location in your browser settings, then tap Find my location."}
+          {geoState === "unavailable" && "Your location isn’t available on this device. You can still browse campus places."}
+          {geoState === "idle" && "Tap Find my location to show where you are."}
+        </p>
+
         {selected && (
           <div className="mt-3 rounded-control border border-line bg-background p-4 shadow-inai" role="status">
             <div className="flex items-center justify-between">
@@ -679,14 +718,22 @@ export function MapScreen() {
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <Button className="rounded-full" onClick={() => { setNavigating(true); setStepIndex(0); speakStep(0); showToast("Navigation started — follow the spoken steps"); }}>
-            <Navigation /> Start Navigation
+          <Button
+            className="min-h-14 w-full justify-center whitespace-normal rounded-full px-4 text-base font-extrabold leading-tight"
+            onClick={() => {
+              setNavigating(true); setStepIndex(0);
+              void tts.speak("Navigation is ready.", { priority: "guidance", interrupt: true });
+              window.setTimeout(() => speakStep(0), 900);
+              showToast("Navigation started — follow the spoken steps");
+            }}
+          >
+            <Navigation className="size-5 shrink-0" /> Start Navigation
           </Button>
-          <Button variant="outline" className="rounded-full" onClick={() => { setShowSteps(false); speakStep(stepIndex); }}>
-            <Volume2 /> Get Audio Directions
+          <Button variant="outline" className="min-h-14 w-full justify-center whitespace-normal rounded-full px-4 text-base font-extrabold leading-tight" onClick={() => { setShowSteps(false); speakStep(stepIndex); }}>
+            <Volume2 className="size-5 shrink-0" /> Get Audio Directions
           </Button>
-          <Button variant="outline" className="rounded-full" onClick={() => setShowSteps(!showSteps)}>
-            <BookOpen /> View Route Steps
+          <Button variant="outline" className="min-h-14 w-full justify-center whitespace-normal rounded-full px-4 text-base font-extrabold leading-tight" onClick={() => setShowSteps(!showSteps)}>
+            <BookOpen className="size-5 shrink-0" /> View Route Steps
           </Button>
         </div>
 
