@@ -23,6 +23,8 @@ import { DashboardCard, RecentEventsPreview, resolveDashboard } from "@/componen
 import { selectedNeeds, useAccessibilityStore, type Need } from "@/stores/accessibility-store";
 import { useSessionStore } from "@/stores/session-store";
 import { DemoBadge } from "@/components/inai/StatusPill";
+import { useShakeToActivate } from "@/motion/useShakeToActivate";
+import { inaiAudioManager } from "@/audio/INAIAudioManager";
 
 const tts = new BrowserTTSService();
 const needs: Need[] = ["visual", "hearing", "speech"];
@@ -46,6 +48,12 @@ function useSpokenLine(text:string) {
 export function IntroScreen() {
   const line="Hi! I'm INAI. I'm here to make your everyday environment easier to understand and interact with.";
   const speaking=useSpokenLine(line);
+  useShakeToActivate({
+    enabled: !inaiAudioManager.isAudioUnlocked(),
+    onActivated: () => {
+      inaiAudioManager.playConfirmationChime();
+    },
+  });
   const capabilities:[[LucideIcon,string,string],[LucideIcon,string,string],[LucideIcon,string,string],[LucideIcon,string,string]]=[
     [Volume2,"Speaks","Talks and guides you"],[HeartHandshake,"Signs","Uses sign language"],[MessageCircle,"Shows Text","Displays clear information"],[Sparkles,"Always With You","A friendly companion"],
   ];

@@ -11,6 +11,7 @@ import { useAccessibilityStore } from "@/stores/accessibility-store";
 import { ttsService } from "@/services/tts";
 import { hapticService } from "@/services/haptics";
 import { AccessibilityStartupFlow } from "@/components/inai/AccessibilityStartupFlow";
+import { AudioDiagnosticsPanel } from "@/components/inai/AudioDiagnosticsPanel";
 
 const footer = <p className="py-5 text-center text-[10px] font-bold uppercase text-muted-foreground">People · Access · Opportunities · Together</p>;
 
@@ -46,6 +47,7 @@ export function SplashScreen() {
         </div>
         <p className="mt-3 text-xs text-muted-foreground">Building a more inclusive tomorrow…</p>
       </div>
+      <AudioDiagnosticsPanel />
       {footer}
     </AppShell>
   );

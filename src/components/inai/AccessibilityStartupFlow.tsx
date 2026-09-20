@@ -13,6 +13,9 @@ import {
   matchYesNoIntent,
   matchVisuallyImpairedOption,
 } from "@/lib/inai/voice-accessibility";
+import { useINAIAudio } from "@/audio/useINAIAudio";
+import { useShakeToActivate } from "@/motion/useShakeToActivate";
+import { VoiceActivationCard } from "@/components/inai/VoiceActivationCard";
 
 export type StartupFlowState =
   | "INITIALIZING"
@@ -39,6 +42,8 @@ export function AccessibilityStartupFlow({ onFlowComplete }: AccessibilityStartu
   const [recognizedText, setRecognizedText] = useState<string>("");
   const [audioStatus, setAudioStatus] = useState<"idle" | "speaking" | "listening">("idle");
   const [isMicAvailable, setIsMicAvailable] = useState<boolean>(true);
+
+  const { isUnlocked, unlockAudio } = useINAIAudio();
 
   // Guard refs to prevent race conditions, duplicate triggers, and memory leaks
   const activeTokenRef = useRef(0);
@@ -194,6 +199,7 @@ export function AccessibilityStartupFlow({ onFlowComplete }: AccessibilityStartu
   const activateVisuallyImpairedMode = useCallback(async () => {
     const token = ++activeTokenRef.current;
     stopAllAudio();
+    void unlockAudio("button");
     setNeed("visual", true);
     useAccessibilityStore.getState().setPreference("voiceEnabled", true);
     setOnboarded(true);
@@ -369,6 +375,38 @@ export function AccessibilityStartupFlow({ onFlowComplete }: AccessibilityStartu
       listenForVisualImpairmentAnswerRef.current();
     }
   }, [speakStrict]);
+
+  // Handle explicit audio activation via button or physical shake
+  const handleVoiceActivated = useCallback(async (source: "button" | "shake") => {
+    const token = ++activeTokenRef.current;
+    stopAllAudio();
+
+    const confirmMsg = "INAI voice assistance is now enabled.";
+    setStatusMessage(confirmMsg);
+    await speakStrict(confirmMsg, "alert");
+
+    if (activeTokenRef.current !== token || unmountedRef.current) return;
+
+    // Follow up immediately with visual impairment question
+    setState("ASKING_VISUAL_IMPAIRMENT");
+    const question = "Are you visually impaired? Please say Yes or No.";
+    setStatusMessage(question);
+    const spoke = await speakStrict(question, "guidance");
+
+    if (activeTokenRef.current !== token || unmountedRef.current) return;
+
+    if (spoke) {
+      setState("LISTENING_VISUAL_IMPAIRMENT");
+      listenForVisualImpairmentAnswerRef.current();
+    }
+  }, [speakStrict, stopAllAudio]);
+
+  useShakeToActivate({
+    enabled: !isUnlocked || state === "ASKING_VISUAL_IMPAIRMENT",
+    onActivated: () => {
+      void handleVoiceActivated("shake");
+    },
+  });
 
   // Keep refs up to date
   listenForVisuallyImpairedOptionRef.current = listenForVisuallyImpairedOption;
@@ -553,6 +591,14 @@ export function AccessibilityStartupFlow({ onFlowComplete }: AccessibilityStartu
             exit={{ opacity: 0, y: -10 }}
             className="mt-6 rounded-card border-2 border-primary/40 bg-card p-5 text-center shadow-lg"
           >
+            {/* Audio initialization card if voice is not yet unlocked in WebView / Appilix */}
+            {!isUnlocked && (
+              <VoiceActivationCard
+                onActivated={() => void handleVoiceActivated("button")}
+                className="mb-5 text-left border-primary/30 shadow-none bg-primary/5"
+              />
+            )}
+
             <div className="flex items-center justify-center gap-2.5">
               <INAIAvatar
                 state={audioStatus === "speaking" ? "speaking" : audioStatus === "listening" ? "listening" : "idle"}
