@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { createAvatarDriver } from "@/avatar/driver";
 import type { AvatarRenderState, AvatarSize, AvatarState } from "@/avatar/types";
 import { CaptionRegion } from "./CaptionRegion";
-import fallbackAsset from "@/assets/inai-avatar.png.asset.json";
+import inaiAvatarImg from "@/assets/inai-avatar.png";
 
 interface INAIAvatarProps {
   state?: AvatarState; gesture?: string; mouthOpenness?: number;
@@ -18,7 +18,7 @@ const labels: Record<AvatarState, string> = {
   emergency: "INAI is supporting an emergency flow", signing: "INAI is demonstrating a sign",
   guiding: "INAI is guiding you",
 };
-const IDLE_POSE = "/inai/poses/idle_seated.png";
+const IDLE_POSE = inaiAvatarImg;
 
 function SparkleDrift({ intensity }: { intensity: number }) {
   const stars = [
@@ -67,10 +67,9 @@ export function INAIAvatar({
   useEffect(() => { setMouth(mouthSrc); }, [mouthSrc]);
   useEffect(() => { setBlink(`inai-blink ${(3 + Math.random() * 3).toFixed(2)}s ease-in-out infinite`); }, []);
 
-  // Missing sprite asset falls back to idle, then to the bundled character — silently.
+  // Missing sprite asset falls back to idle image silently.
   const onPoseError = () => {
-    if (pose !== IDLE_POSE && pose !== fallbackAsset.url) setPose(IDLE_POSE);
-    else if (pose !== fallbackAsset.url) setPose(fallbackAsset.url);
+    if (pose !== inaiAvatarImg) setPose(inaiAvatarImg);
   };
 
   return (

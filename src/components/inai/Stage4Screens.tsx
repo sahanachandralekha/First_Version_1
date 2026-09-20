@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Bell, BookOpen, Check, ChevronLeft, ChevronRight,
-  Cross, Ear, Eye, HandHeart, HeartHandshake, Home, Info, Languages, MapPin, MessageCircle,
-  Navigation, Pause, Play, RotateCcw, Share2, ShieldAlert, Sparkles, Siren, Trash2, Type,
+  Cross, Ear, Eye, HandHeart, HeartHandshake, Home, Info, Languages, Mail, MapPin, MessageCircle,
+  Navigation, Pause, Play, RotateCcw, Send, Share2, ShieldAlert, Sparkles, Siren, Trash2, Type,
   Volume2, Waves, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { hapticService } from "@/services/haptics";
 import { signService, SIGN_SOURCE, type SignPhrase } from "@/services/sign-language";
 import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
-import { sendSosEmail } from "@/lib/inai/sos.functions";
+import { sendSosEmail, checkEmailConfig } from "@/lib/inai/sos.functions";
 import { useEmergencyStore } from "@/stores/emergency-store";
 
 const tts = new BrowserTTSService();
@@ -797,34 +797,56 @@ export function EmergencyScreen() {
   const [saved, setSaved] = useState(false);
   const [emailStatus, setEmailStatus] = useState<{ state: "idle" | "sending" | "sent" | "error"; message: string }>({ state: "idle", message: "" });
   const sendSos = useServerFn(sendSosEmail);
+  const checkConfig = useServerFn(checkEmailConfig);
+  const [configState, setConfigState] = useState<{ configured: boolean; from: string } | null>(null);
+
+  useEffect(() => {
+    void checkConfig().then(setConfigState).catch(() => setConfigState({ configured: false, from: "" }));
+  }, [checkConfig]);
 
   // Real email dispatch. Location is attached only when the device actually gives it.
-  const sendAlert = useCallback(async () => {
-    const to = useEmergencyStore.getState().contactEmail.trim();
+  const sendAlert = useCallback(async (customNote?: string) => {
+    const to = (draftEmail || useEmergencyStore.getState().contactEmail).trim();
     if (!to) {
-      setEmailStatus({ state: "error", message: "Add a security email address above and save it, then hold the button again." });
+      setEmailStatus({ state: "error", message: "Please enter a valid recipient email address above." });
+      showToast("Please enter an email address first");
       return;
     }
-    setEmailStatus({ state: "sending", message: "Sending the SOS alert…" });
+    // Auto-save contact details
+    setContactEmail(to);
+    if (draftName.trim()) setContactName(draftName.trim());
+    setSaved(true);
+
+    setEmailStatus({ state: "sending", message: `Sending real-time SOS alert email to ${to}…` });
+
     const position = await new Promise<GeolocationPosition | null>((resolve) => {
       if (!("geolocation" in navigator)) { resolve(null); return; }
-      navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { timeout: 8000, enableHighAccuracy: true });
+      navigator.geolocation.getCurrentPosition((p) => resolve(p), () => resolve(null), { timeout: 6000, enableHighAccuracy: true });
     });
+
     try {
-      await sendSos({ data: {
+      const res = await sendSos({ data: {
         to,
-        name: useEmergencyStore.getState().contactName,
+        name: draftName.trim() || useEmergencyStore.getState().contactName,
         latitude: position?.coords.latitude ?? null,
         longitude: position?.coords.longitude ?? null,
         accuracy: position?.coords.accuracy ?? null,
-        note: "",
+        note: customNote ?? "",
       } });
-      setEmailStatus({ state: "sent", message: position ? "SOS alert sent successfully, with your location." : "SOS alert sent successfully. Your location could not be obtained." });
-    } catch (error) {
+      setEmailStatus({
+        state: "sent",
+        message: position
+          ? `SOS alert sent in real time to ${to} with live GPS coordinates (${res.at}).`
+          : `SOS alert sent in real time to ${to} (${res.at}).`,
+      });
+      showToast("Emergency SOS email dispatched!");
+    } catch (error: any) {
       console.error("SOS email failed", error);
-      setEmailStatus({ state: "error", message: "Unable to send the SOS alert. Please check your connection and try again." });
+      const msg = error?.message || "Unable to send the SOS alert. Please check your connection or RESEND_API_KEY.";
+      setEmailStatus({ state: "error", message: msg });
+      showToast("Email sending failed");
     }
-  }, [sendSos]);
+  }, [draftEmail, draftName, sendSos, setContactEmail, setContactName, showToast]);
 
   const clearHold = useCallback(() => {
     if (tick.current) window.clearInterval(tick.current);
@@ -891,11 +913,11 @@ export function EmergencyScreen() {
       <ScreenHeader title="Emergency Mode" subtitle="You’re not alone. INAI is with you." icon={Siren} backTo="/home" />
       <div className="flex-1 px-5 pb-6">
         <div role="alert" className="rounded-control bg-speech px-4 py-3 text-center text-sm font-extrabold text-speech-foreground">
-          SIMULATED — this prototype does not contact real emergency services.
+          SIMULATED — this prototype does not contact 911/112 emergency services.
         </div>
 
         <h2 className="mt-4 text-2xl font-extrabold text-ink">In an emergency, help is just a tap away.</h2>
-        <p className="mt-1 text-sm text-muted-foreground">INAI will alert nearby support and keep guiding you.</p>
+        <p className="mt-1 text-sm text-muted-foreground">INAI will alert your designated security/caretaker contact via real-time email.</p>
 
         <div className="mt-4 grid grid-cols-[1fr_8rem] items-center gap-2">
           <div className="rounded-card border border-primary/10 bg-primary-tint p-4 shadow-inai">
@@ -909,18 +931,37 @@ export function EmergencyScreen() {
           className="mt-4 rounded-card border border-line bg-background p-4 shadow-inai"
           onSubmit={(event) => {
             event.preventDefault();
-            setContactEmail(draftEmail.trim());
+            const email = draftEmail.trim();
+            if (!email) {
+              showToast("Please enter an email address");
+              return;
+            }
+            setContactEmail(email);
             setContactName(draftName.trim());
             setSaved(true);
             showToast("Emergency contact saved");
           }}
         >
-          <h2 className="text-sm font-extrabold uppercase text-muted-foreground">Who should we email?</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold uppercase text-muted-foreground">Who should we email?</h2>
+            {configState && !configState.configured && (
+              <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-bold text-amber-600">
+                Setup Key Needed
+              </span>
+            )}
+            {configState?.configured && (
+              <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2.5 py-0.5 text-[11px] font-bold text-green-600">
+                <span className="size-1.5 rounded-full bg-green-500" />
+                Live Email Ready
+              </span>
+            )}
+          </div>
+
           <label className="mt-2 block text-sm font-semibold text-ink" htmlFor="sos-email">Security email address</label>
           <input
             id="sos-email" type="email" inputMode="email" autoComplete="email" required
             value={draftEmail} onChange={(event) => { setDraftEmail(event.target.value); setSaved(false); }}
-            placeholder="security@yourcampus.edu"
+            placeholder="security@yourcampus.edu or your.email@example.com"
             className="mt-1 min-h-12 w-full rounded-control border border-line bg-canvas px-3 text-base text-ink"
           />
           <label className="mt-3 block text-sm font-semibold text-ink" htmlFor="sos-name">Your name (optional)</label>
@@ -930,9 +971,58 @@ export function EmergencyScreen() {
             placeholder="So they know who needs help"
             className="mt-1 min-h-12 w-full rounded-control border border-line bg-canvas px-3 text-base text-ink"
           />
-          <Button type="submit" variant="outline" className="mt-3 min-h-12 w-full rounded-full font-extrabold">Save contact</Button>
+
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button type="submit" variant="outline" className="min-h-11 w-full rounded-full font-extrabold">
+              Save contact
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              className="min-h-11 w-full rounded-full font-extrabold gap-1.5 bg-speech text-speech-foreground hover:bg-speech/90"
+              disabled={emailStatus.state === "sending"}
+              onClick={() => void sendAlert("Test SOS trigger by user")}
+            >
+              <Mail className="size-4" />
+              {emailStatus.state === "sending" ? "Sending…" : "Send Test SOS Email"}
+            </Button>
+          </div>
+
+          {/* Real-time Email Dispatch Status Banner */}
+          {emailStatus.state !== "idle" && (
+            <div
+              role="status"
+              className={`mt-3 rounded-control border p-3 text-sm font-semibold transition-all ${
+                emailStatus.state === "sending"
+                  ? "border-primary/40 bg-primary-tint text-primary"
+                  : emailStatus.state === "sent"
+                  ? "border-green-500/40 bg-green-500/10 text-green-700 dark:text-green-300"
+                  : "border-destructive/40 bg-destructive/10 text-destructive"
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                {emailStatus.state === "sending" && <span className="mt-0.5 size-4 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+                {emailStatus.state === "sent" && <Check className="mt-0.5 size-4 shrink-0 text-green-600" />}
+                {emailStatus.state === "error" && <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />}
+                <div className="flex-1">
+                  <p className="font-extrabold">
+                    {emailStatus.state === "sent" ? "Email Dispatched in Real Time" : emailStatus.state === "sending" ? "Sending Real-Time Alert…" : "Email Dispatch Notice"}
+                  </p>
+                  <p className="mt-0.5 text-xs opacity-90 leading-relaxed">{emailStatus.message}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {configState && !configState.configured && (
+            <div className="mt-3 rounded-control border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+              <p className="font-bold">⚠️ RESEND_API_KEY is not set in .env yet.</p>
+              <p className="mt-1 opacity-90">To deliver real emails to inboxes, add your free Resend key to <code className="rounded bg-black/10 px-1 py-0.5 font-mono font-bold">.env</code>: <code className="font-mono">RESEND_API_KEY=re_...</code></p>
+            </div>
+          )}
+
           <p role="status" className="mt-2 text-xs text-muted-foreground">
-            {saved || contactEmail ? `Alerts will be emailed to ${contactEmail || draftEmail}.` : "Add an address so the SOS alert can actually be sent."}
+            {saved || contactEmail ? `Alerts will be emailed to ${contactEmail || draftEmail}.` : "Add an address so the SOS alert can be dispatched."}
           </p>
         </form>
 
@@ -982,6 +1072,13 @@ export function EmergencyScreen() {
               <span className="absolute left-1/2 top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-background bg-primary shadow-inai" />
               <span className="absolute bottom-3 left-3 rounded bg-background px-2 py-1 text-xs font-bold text-primary">Your location shared</span>
             </div>
+            {emailStatus.state !== "idle" && (
+              <div className={`rounded-control border p-3 text-xs font-semibold sm:col-span-2 ${
+                emailStatus.state === "sent" ? "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300" : emailStatus.state === "sending" ? "border-primary/30 bg-primary-tint text-primary" : "border-destructive/30 bg-destructive/10 text-destructive"
+              }`}>
+                {emailStatus.message}
+              </div>
+            )}
           </div>
         )}
 

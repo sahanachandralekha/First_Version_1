@@ -69,26 +69,75 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
 
   /** True when the stream that opened is the selfie camera. */
   facingUser = false;
+  facingMode: "user" | "environment" = "environment";
+  mirrored = false;
 
-  async start(video: HTMLVideoElement) {
+  async start(video: HTMLVideoElement, options?: { facingMode?: "user" | "environment"; mirrored?: boolean }) {
     this.setStatus("requesting-camera");
-    // The rear camera shows the world the right way round. Only fall back to the
-    // front camera when no rear camera exists, and never flip the preview.
-    try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
-      this.facingUser = false;
-    } catch {
-      this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-      this.facingUser = true;
+    if (options?.facingMode) {
+      this.facingMode = options.facingMode;
     }
-    video.srcObject = this.stream;
-    video.style.transform = "none";
-    await video.play();
+    if (options?.mirrored !== undefined) {
+      this.mirrored = options.mirrored;
+    } else {
+      this.mirrored = this.facingMode === "user";
+    }
+
+    await this.acquireStream(video);
+
     this.setStatus("loading-model");
-    const [{ load }] = await Promise.all([import("@tensorflow-models/coco-ssd"), import("@tensorflow/tfjs")]);
-    this.model = await load({ base: "lite_mobilenet_v2" });
+    if (!this.model) {
+      const [{ load }] = await Promise.all([import("@tensorflow-models/coco-ssd"), import("@tensorflow/tfjs")]);
+      this.model = await load({ base: "lite_mobilenet_v2" });
+    }
     this.setStatus("running");
-    this.timer = window.setInterval(() => void this.tick(video), 250); // ~4 fps
+    if (!this.timer) {
+      this.timer = window.setInterval(() => void this.tick(video), 250); // ~4 fps
+    }
+  }
+
+  async acquireStream(video: HTMLVideoElement) {
+    if (this.stream) {
+      this.stream.getTracks().forEach((track) => track.stop());
+      this.stream = undefined;
+    }
+
+    try {
+      if (this.facingMode === "environment") {
+        try {
+          this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
+          this.facingUser = false;
+        } catch {
+          this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+          this.facingUser = false;
+        }
+      } else {
+        this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+        this.facingUser = true;
+      }
+    } catch {
+      this.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      this.facingUser = this.facingMode === "user";
+    }
+
+    video.srcObject = this.stream;
+    video.style.transform = this.mirrored ? "scaleX(-1)" : "none";
+    await video.play();
+  }
+
+  async flipCamera(video: HTMLVideoElement) {
+    this.facingMode = this.facingMode === "user" ? "environment" : "user";
+    this.mirrored = this.facingMode === "user";
+    this.setStatus("requesting-camera");
+    await this.acquireStream(video);
+    this.setStatus("running");
+    return { facingMode: this.facingMode, facingUser: this.facingUser, mirrored: this.mirrored };
+  }
+
+  toggleMirror(video: HTMLVideoElement) {
+    this.mirrored = !this.mirrored;
+    video.style.transform = this.mirrored ? "scaleX(-1)" : "none";
+    return this.mirrored;
   }
 
   private async tick(video: HTMLVideoElement) {
@@ -132,7 +181,6 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
     this.timer = undefined;
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = undefined;
-    this.model = undefined;
     this.detecting = false;
     this.setStatus("idle");
   }

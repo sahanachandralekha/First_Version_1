@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronRight, Maximize2 } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { CameraOff, ChevronRight, Maximize2, SwitchCamera } from "lucide-react";
 import { ErrorState } from "@/components/shared/states";
 import { visionService, cameraUnavailableError, type VisionDetection, type VisionStatus } from "@/services/vision";
 
@@ -12,30 +12,48 @@ const toneChip: Record<VisionDetection["tone"], string> = {
 
 export interface StageBox { width: number; height: number }
 
+export interface CameraStageHandle {
+  captureFrame: (quality?: number) => string | null;
+  flipCamera: () => Promise<{ facingMode: "user" | "environment"; facingUser: boolean; mirrored: boolean } | undefined>;
+  videoElement: HTMLVideoElement | null;
+}
+
+export interface CameraStageProps {
+  onDetections?: (detections: VisionDetection[], frame: StageBox) => void;
+  onFrame?: (frame: StageBox) => void;
+  height?: string;
+  children?: ReactNode;
+  showControls?: boolean;
+  initialFacing?: "user" | "environment";
+  active?: boolean;
+  onStartCamera?: () => void;
+}
+
 /**
  * Maps a detection box from video pixels to on-screen pixels.
  *
  * The preview is `object-cover`, so the video is scaled up and cropped. Without
  * this the boxes drift away from what they mark.
  */
-function coverRect(box: VisionDetection["box"], frame: StageBox, stage: StageBox) {
+function coverRect(box: VisionDetection["box"], frame: StageBox, stage: StageBox, mirrored = false) {
   const scale = Math.max(stage.width / frame.width, stage.height / frame.height);
   const offsetX = (stage.width - frame.width * scale) / 2;
   const offsetY = (stage.height - frame.height * scale) / 2;
+  const boxX = mirrored ? frame.width - (box.x + box.width) : box.x;
   return {
-    left: box.x * scale + offsetX,
+    left: boxX * scale + offsetX,
     top: box.y * scale + offsetY,
     width: box.width * scale,
     height: box.height * scale,
   };
 }
 
-export function DetectionOverlay({ detections, frame, stage }: { detections: VisionDetection[]; frame: StageBox; stage: StageBox }) {
+export function DetectionOverlay({ detections, frame, stage, mirrored = false }: { detections: VisionDetection[]; frame: StageBox; stage: StageBox; mirrored?: boolean }) {
   if (!frame.width || !frame.height || !stage.width) return null;
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       {detections.filter((d) => d.rawClass !== "pathway").map((detection) => {
-        const rect = coverRect(detection.box, frame, stage);
+        const rect = coverRect(detection.box, frame, stage, mirrored);
         return (
           <span
             key={detection.id}
@@ -66,14 +84,20 @@ export function ClearPathOverlay({ side }: { side: "left" | "right" | "ahead" })
   );
 }
 
-/** Live camera with graceful degradation: without camera access the rest of the screen still works. */
-export function CameraStage({
-  onDetections, onFrame, height = "h-72", children, showControls = true,
-}: {
-  onDetections?: (detections: VisionDetection[], frame: StageBox) => void;
-  onFrame?: (frame: StageBox) => void;
-  height?: string; children?: ReactNode; showControls?: boolean;
-}) {
+/** Live camera with accessible controls and snapshot capture support. */
+export const CameraStage = forwardRef<CameraStageHandle, CameraStageProps>(function CameraStage(
+  {
+    onDetections,
+    onFrame,
+    height = "h-72",
+    children,
+    showControls = true,
+    initialFacing = "environment",
+    active = true,
+    onStartCamera,
+  },
+  ref,
+) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [detections, setDetections] = useState<VisionDetection[]>([]);
@@ -82,6 +106,58 @@ export function CameraStage({
   const [attempt, setAttempt] = useState(0);
   const [frame, setFrame] = useState<StageBox>({ width: 0, height: 0 });
   const [stage, setStage] = useState<StageBox>({ width: 0, height: 0 });
+  const [mirrored, setMirrored] = useState(false);
+  const [facing, setFacing] = useState<"user" | "environment">(initialFacing);
+  const [flipping, setFlipping] = useState(false);
+
+  // Expose captureFrame and camera controls via ref
+  useImperativeHandle(ref, () => ({
+    captureFrame: (quality = 0.75) => {
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || video.videoHeight === 0) return null;
+      try {
+        const canvas = document.createElement("canvas");
+        const maxDim = 640;
+        let width = video.videoWidth;
+        let height = video.videoHeight;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+        ctx.drawImage(video, 0, 0, width, height);
+        return canvas.toDataURL("image/jpeg", quality);
+      } catch (err) {
+        console.error("Frame capture error:", err);
+        return null;
+      }
+    },
+    flipCamera: async () => {
+      const video = videoRef.current;
+      if (!video || flipping) return undefined;
+      setFlipping(true);
+      try {
+        const res = await visionService.flipCamera(video);
+        setFacing(res.facingMode);
+        setMirrored(res.mirrored);
+        return res;
+      } catch (err) {
+        console.error("Camera flip error:", err);
+        return undefined;
+      } finally {
+        setFlipping(false);
+      }
+    },
+    videoElement: videoRef.current,
+  }), [flipping]);
 
   useEffect(() => {
     const element = stageRef.current;
@@ -95,6 +171,13 @@ export function CameraStage({
   }, []);
 
   useEffect(() => {
+    if (!active) {
+      visionService.stop();
+      setDetections([]);
+      setStatus("idle");
+      return;
+    }
+
     const video = videoRef.current;
     if (!video) return;
     const offStatus = visionService.onStatus(setStatus);
@@ -106,45 +189,113 @@ export function CameraStage({
       onDetections?.(next, nextFrame);
     });
     setFailed(false);
-    visionService.start(video).catch(() => setFailed(true));
-    return () => { offStatus(); offDetections(); visionService.stop(); };
-  }, [attempt, onDetections, onFrame]);
+    visionService.start(video, { facingMode: facing }).then(() => {
+      setMirrored(visionService.mirrored);
+      setFacing(visionService.facingMode);
+    }).catch(() => setFailed(true));
+
+    return () => {
+      offStatus();
+      offDetections();
+      visionService.stop();
+    };
+  }, [attempt, onDetections, onFrame, active, facing]);
+
+  const handleFlip = async () => {
+    const video = videoRef.current;
+    if (!video || flipping) return;
+    setFlipping(true);
+    try {
+      const res = await visionService.flipCamera(video);
+      setFacing(res.facingMode);
+      setMirrored(res.mirrored);
+    } catch (err) {
+      console.error("Camera flip error:", err);
+    } finally {
+      setFlipping(false);
+    }
+  };
 
   const clearSide = detections.some((d) => d.rawClass === "pathway") ? "ahead" : undefined;
 
   return (
     <div ref={stageRef} className={`relative w-full overflow-hidden rounded-card bg-ink ${height}`}>
-      {/* transform:none keeps the preview true to life — never a mirror image. */}
-      <video
-        ref={videoRef}
-        playsInline
-        muted
-        autoPlay
-        style={{ transform: "none" }}
-        className="size-full object-cover"
-        aria-label="Live camera view"
-      />
-      {!failed && <DetectionOverlay detections={detections} frame={frame} stage={stage} />}
-      {!failed && clearSide && <ClearPathOverlay side={clearSide} />}
-      {!failed && (
-        <span className="absolute left-3 top-3 rounded-full bg-live px-3 py-1 text-xs font-extrabold text-primary-foreground">
-          ● {status === "loading-model" ? "Preparing analysis" : status === "requesting-camera" ? "Opening camera" : "Live Analysis"}
-        </span>
-      )}
-      {showControls && !failed && (
+      {active ? (
         <>
-          <button type="button" className="absolute bottom-3 left-3 min-h-12 min-w-12 rounded-full bg-background/90 px-3 text-sm font-extrabold">1x</button>
-          <button type="button" aria-label="Fullscreen" className="absolute bottom-3 right-3 grid size-12 place-items-center rounded-full bg-background/90">
-            <Maximize2 className="size-4" />
-          </button>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            autoPlay
+            style={{ transform: mirrored ? "scaleX(-1)" : "none" }}
+            className="size-full object-cover transition-transform duration-300"
+            aria-label="Live camera view for visual assistance"
+          />
+          {!failed && <DetectionOverlay detections={detections} frame={frame} stage={stage} mirrored={mirrored} />}
+          {!failed && clearSide && <ClearPathOverlay side={clearSide} />}
+          {!failed && (
+            <div className="absolute left-3 top-3 flex items-center gap-2">
+              <span className="rounded-full bg-live px-3 py-1 text-xs font-extrabold text-primary-foreground">
+                ● {status === "loading-model" ? "Loading AI Model" : status === "requesting-camera" ? "Opening Camera…" : "Camera Active"}
+              </span>
+              <span className="rounded-full bg-background/80 px-2.5 py-1 text-[11px] font-bold text-ink backdrop-blur">
+                {facing === "user" ? "Front Camera" : "Rear Camera"}
+              </span>
+            </div>
+          )}
+          {!failed && (
+            <button
+              type="button"
+              aria-label="Flip between front and rear camera"
+              onClick={handleFlip}
+              disabled={flipping}
+              className={`absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1.5 text-xs font-extrabold text-ink shadow-md backdrop-blur transition-all active:scale-95 hover:bg-background ${flipping ? "opacity-60" : ""}`}
+            >
+              <SwitchCamera className={`size-4 text-primary ${flipping ? "animate-spin" : ""}`} />
+              <span>Flip</span>
+            </button>
+          )}
+          {showControls && !failed && (
+            <>
+              <button
+                type="button"
+                aria-label="Switch camera"
+                onClick={handleFlip}
+                disabled={flipping}
+                className="absolute bottom-3 right-16 grid size-12 place-items-center rounded-full bg-background/90 text-ink shadow-md transition-transform active:scale-90"
+              >
+                <SwitchCamera className={`size-5 text-primary ${flipping ? "animate-spin" : ""}`} />
+              </button>
+              <button type="button" aria-label="Fullscreen camera" className="absolute bottom-3 right-3 grid size-12 place-items-center rounded-full bg-background/90 text-ink">
+                <Maximize2 className="size-4" />
+              </button>
+            </>
+          )}
+          {children}
+          {failed && (
+            <div className="absolute inset-0 grid place-items-center bg-background p-4 text-center">
+              <ErrorState {...cameraUnavailableError} onRetry={() => setAttempt((value) => value + 1)} />
+            </div>
+          )}
         </>
-      )}
-      {children}
-      {failed && (
-        <div className="absolute inset-0 grid place-items-center bg-background p-3">
-          <ErrorState {...cameraUnavailableError} onRetry={() => setAttempt((value) => value + 1)} />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-canvas/95 p-6 text-center" role="status" aria-live="polite">
+          <CameraOff className="mb-3 size-12 text-muted-foreground" />
+          <p className="text-base font-extrabold text-ink">Camera is paused</p>
+          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+            Camera stream is stopped and device battery is saved. Tap Start Camera to resume.
+          </p>
+          {onStartCamera && (
+            <button
+              type="button"
+              onClick={onStartCamera}
+              className="mt-4 rounded-full bg-primary px-5 py-2.5 text-xs font-extrabold text-primary-foreground shadow-sm transition-transform active:scale-95"
+            >
+              Start Camera
+            </button>
+          )}
         </div>
       )}
     </div>
   );
-}
+});
