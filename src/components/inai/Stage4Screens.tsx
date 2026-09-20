@@ -795,7 +795,8 @@ export function EmergencyScreen() {
   const contactName = useEmergencyStore((s) => s.contactName);
   const setContactEmail = useEmergencyStore((s) => s.setContactEmail);
   const setContactName = useEmergencyStore((s) => s.setContactName);
-  const [draftEmail, setDraftEmail] = useState(contactEmail);
+  // Fresh SOS session — start with empty email so old contact email is never reused automatically
+  const [draftEmail, setDraftEmail] = useState("");
   const [draftName, setDraftName] = useState(contactName);
   const [saved, setSaved] = useState(false);
   const [emailStatus, setEmailStatus] = useState<{ state: "idle" | "sending" | "sent" | "error"; message: string }>({ state: "idle", message: "" });
@@ -803,28 +804,35 @@ export function EmergencyScreen() {
   const checkConfig = useServerFn(checkEmailConfig);
   const [configState, setConfigState] = useState<{ configured: boolean; from: string } | null>(null);
 
-  // Voice SOS Email Collection State Machine
+  // Voice SOS State Machine
   const [voiceSosActive, setVoiceSosActive] = useState(false);
-  const [voiceSosPhase, setVoiceSosPhase] = useState<"idle" | "asking" | "listening" | "processing" | "confirming" | "error">("idle");
+  const [voiceSosPhase, setVoiceSosPhase] = useState<"idle" | "asking" | "listening" | "confirming" | "sending" | "sent" | "error">("idle");
   const [voiceSosPromptText, setVoiceSosPromptText] = useState("");
   const [spokenEmailRaw, setSpokenEmailRaw] = useState("");
+
   const voiceTokenRef = useRef(0);
-  const retryEmailCountRef = useRef(0);
+  const unmountedRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const isListeningRef = useRef(false);
+  const sttUnsubRef = useRef<(() => void) | null>(null);
   const timeoutTimerRef = useRef<number | undefined>(undefined);
+  const hasSentSosRef = useRef(false);
+  const hasStartedVoiceRef = useRef(false);
 
   useEffect(() => {
     void checkConfig().then(setConfigState).catch(() => setConfigState({ configured: false, from: "" }));
   }, [checkConfig]);
 
   // Real email dispatch. Location is attached only when the device actually gives it.
-  const sendAlert = useCallback(async (customNote?: string) => {
-    const to = (draftEmail || useEmergencyStore.getState().contactEmail).trim();
+  const sendAlert = useCallback(async (customNote?: string, explicitTo?: string) => {
+    const to = (explicitTo || draftEmail).trim();
     if (!to) {
       setEmailStatus({ state: "error", message: "Please enter a valid recipient email address above." });
       showToast("Please enter an email address first");
       return;
     }
     // Auto-save contact details
+    setDraftEmail(to);
     setContactEmail(to);
     if (draftName.trim()) setContactName(draftName.trim());
     setSaved(true);
@@ -866,7 +874,7 @@ export function EmergencyScreen() {
     setHolding(false);
   }, []);
 
-  const activate = useCallback(() => {
+  const activate = useCallback((targetEmail?: string) => {
     clearHold();
     setProgress(1);
     setActivated(true);
@@ -884,237 +892,400 @@ export function EmergencyScreen() {
         is_simulated: true,
       });
     })();
-    void sendAlert();
+    void sendAlert(undefined, targetEmail);
   }, [clearHold, sendAlert]);
 
-  // Voice SOS Email State Machine Methods
-  const stopVoiceSos = useCallback(() => {
+  // Cleanly stop listening and remove speech-recognition listeners
+  const stopListening = useCallback(() => {
     if (timeoutTimerRef.current) {
       window.clearTimeout(timeoutTimerRef.current);
       timeoutTimerRef.current = undefined;
     }
-    sttService.stop();
-    tts.cancel();
-    setVoiceSosPhase("idle");
+    if (sttUnsubRef.current) {
+      try {
+        sttUnsubRef.current();
+      } catch {
+        // Ignore
+      }
+      sttUnsubRef.current = null;
+    }
+    isListeningRef.current = false;
+    try {
+      sttService.stop();
+    } catch {
+      // Ignore
+    }
   }, []);
 
-  const listenForSpokenEmail = useCallback(() => {
+  // Safe TTS speaking helper: guarantees STT is stopped first, then awaits TTS completion
+  const speakStrict = useCallback(async (text: string, priority: "emergency" | "alert" | "guidance" = "emergency"): Promise<boolean> => {
     const token = voiceTokenRef.current;
+    stopListening();
+    if (unmountedRef.current) return false;
+
+    isSpeakingRef.current = true;
+    try {
+      await tts.speak(text, { priority, interrupt: true });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      if (voiceTokenRef.current === token && !unmountedRef.current) {
+        isSpeakingRef.current = false;
+      }
+    }
+  }, [stopListening]);
+
+  // Support "go back", "cancel", "close", "exit" at any point without sending SOS
+  const handleCancelOrExit = useCallback(() => {
+    voiceTokenRef.current++;
+    stopListening();
+    tts.cancel();
+    setVoiceSosPhase("idle");
+    setVoiceSosActive(false);
+    showToast("SOS cancelled");
+    void tts.speak("SOS cancelled. Returning to main menu.", { priority: "guidance", interrupt: true });
+    void navigate({ to: "/" });
+  }, [navigate, showToast, stopListening]);
+
+  // State machine function references to avoid circular closure dependencies
+  const askForEmailRef = useRef<(prompt?: string) => Promise<void>>(async () => {});
+  const listenForEmailRef = useRef<() => void>(() => {});
+  const askForConfirmationRef = useRef<(email: string) => Promise<void>>(async () => {});
+  const listenForConfirmationRef = useRef<(email: string) => void>(() => {});
+
+  // Step 1: Prompt email via TTS -> Wait for TTS to finish -> Start listening
+  const askForEmail = useCallback(async (customPrompt?: string) => {
+    const token = ++voiceTokenRef.current;
+    stopListening();
+
+    setVoiceSosActive(true);
+    setVoiceSosPhase("asking");
+    const prompt = customPrompt || "Please tell me the email address where you want to send the SOS message.";
+    setVoiceSosPromptText(prompt);
+
+    const spoke = await speakStrict(prompt, "emergency");
+    if (!spoke || voiceTokenRef.current !== token || unmountedRef.current) return;
+
+    listenForEmailRef.current();
+  }, [speakStrict, stopListening]);
+
+  // Step 2: Listen for natural spoken email
+  const listenForEmail = useCallback(() => {
+    const token = voiceTokenRef.current;
+    stopListening();
+
     if (!isSpeechRecognitionSupported()) {
       setVoiceSosPhase("error");
       setVoiceSosPromptText("Microphone speech recognition is not supported in this browser. Please type the email above.");
       return;
     }
 
-    sttService.stop();
-    tts.cancel();
     setVoiceSosPhase("listening");
-    setVoiceSosPromptText("Listening for email address (e.g., 'pranavi at gmail dot com')...");
+    setVoiceSosPromptText("Listening for email address (e.g., 'SanjayRagunath07 at Gmail dot com')...");
+    isListeningRef.current = true;
 
     let handled = false;
     let silenceTimer: number | undefined;
 
+    // Timeout if nothing is spoken
     timeoutTimerRef.current = window.setTimeout(() => {
-      if (voiceTokenRef.current === token && !handled) {
+      if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
         handled = true;
-        sttService.stop();
-        retrySpokenEmail("I didn't hear an email address. Please say the email address again.");
+        stopListening();
+        void askForEmailRef.current("I didn't hear an email address. Please tell me the email address where you want to send the SOS message.");
       }
     }, 11000);
 
-    const processCapturedSpeech = (rawText: string) => {
+    const handleEmailCaptured = (email: string) => {
       if (handled || voiceTokenRef.current !== token) return;
-      const converted = convertSpokenToEmail(rawText);
-      if (isValidEmail(converted)) {
-        handled = true;
-        if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
-        if (silenceTimer) window.clearTimeout(silenceTimer);
-        sttService.stop();
-        setVoiceSosPhase("processing");
+      handled = true;
+      if (silenceTimer) window.clearTimeout(silenceTimer);
+      if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
+      stopListening();
 
-        // Valid email recognized
-        setDraftEmail(converted);
-        setContactEmail(converted);
-        setSaved(true);
-        setVoiceSosPhase("confirming");
-        const confirmMsg = `Email recognized: ${converted}. Sending SOS alert now.`;
-        setVoiceSosPromptText(confirmMsg);
-        showToast(`Email captured: ${converted}`);
+      // Fill existing email field
+      setDraftEmail(email);
+      setSaved(false);
+      showToast(`Email captured: ${email}`);
 
-        // Announce and automatically trigger SOS dispatch
-        void (async () => {
-          try {
-            await tts.speak(confirmMsg, { priority: "emergency", interrupt: true });
-          } catch {
-            // Ignore
-          }
-          if (voiceTokenRef.current === token) {
-            activate();
-          }
-        })();
-      }
+      // TTS confirmation: "Are you saying ...?"
+      void askForConfirmationRef.current(email);
     };
 
     const unsub = sttService.subscribe((rawText, isFinal) => {
-      if (voiceTokenRef.current !== token || handled) return;
+      if (voiceTokenRef.current !== token || handled || !isListeningRef.current) return;
       const clean = rawText.trim();
       if (!clean) return;
 
       setSpokenEmailRaw(clean);
 
-      // Direct navigation commands
-      if (/\b(go back|back|previous page|previous screen|previous)\b/i.test(clean)) {
+      // Support "go back", "cancel", "close", "exit" at any point
+      if (/\b(go back|cancel|close|exit|shut down|quit)\b/i.test(clean)) {
         handled = true;
-        stopVoiceSos();
-        const backMsg = "Returning to main menu. You are on the home screen. You can choose Two-Way Communication, Navigation Guide, or SOS Emergency. What would you like to do?";
-        void tts.speak(backMsg, { priority: "guidance", interrupt: true });
-        void navigate({ to: "/" });
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        stopListening();
+        handleCancelOrExit();
         return;
       }
-      if (/\b(close the app|close app|exit app|exit the app|quit the app|quit|shut down app)\b/i.test(clean)) {
+
+      // Check navigation to other modules
+      if (/\b(two[- ]?way communication|two[- ]?way|communication)\b/i.test(clean)) {
         handled = true;
-        stopVoiceSos();
-        void tts.speak("Closing the app. Voice assistance is now off.", { priority: "guidance", interrupt: true });
-        void navigate({ to: "/home" });
-        return;
-      }
-      if (/\b(two[- ]?way communication|two[- ]?way|communication|camera|vision)\b/i.test(clean)) {
-        handled = true;
-        stopVoiceSos();
+        stopListening();
+        tts.cancel();
         void tts.speak("Opening two-way communication camera.", { priority: "guidance", interrupt: true });
         void navigate({ to: "/vision" });
         return;
       }
-      if (/\b(navigation guide|navigation|guide me|path)\b/i.test(clean)) {
+      if (/\b(navigation guide|navigation)\b/i.test(clean)) {
         handled = true;
-        stopVoiceSos();
+        stopListening();
+        tts.cancel();
         void tts.speak("Opening navigation guide camera.", { priority: "guidance", interrupt: true });
         void navigate({ to: "/guidance" });
         return;
       }
-      if (/\b(explain what is in that|explain this screen|explain this page|what is this|where am i|help)\b/i.test(clean)) {
-        const explainMsg = "You are in SOS Emergency. You can say an emergency contact email to dispatch an alert with live GPS, or say 'go back' to return to the main menu.";
-        setVoiceSosPromptText(explainMsg);
-        void tts.speak(explainMsg, { priority: "guidance", interrupt: true });
-        return;
-      }
 
-      // If already a valid email, process immediately
+      // Parse email candidate
       const candidate = convertSpokenToEmail(clean);
       if (isValidEmail(candidate)) {
-        processCapturedSpeech(clean);
+        handleEmailCaptured(candidate);
         return;
       }
 
       if (isFinal) {
-        // Evaluate final result
-        if (isValidEmail(candidate)) {
-          processCapturedSpeech(clean);
-        } else {
-          handled = true;
-          if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
-          if (silenceTimer) window.clearTimeout(silenceTimer);
-          sttService.stop();
-          retrySpokenEmail("I couldn't understand the email address. Please say the email address again, or say 'go back'.");
-        }
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        silenceTimer = window.setTimeout(() => {
+          if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
+            const finalCandidate = convertSpokenToEmail(clean);
+            if (isValidEmail(finalCandidate)) {
+              handleEmailCaptured(finalCandidate);
+            } else {
+              handled = true;
+              stopListening();
+              void askForEmailRef.current("I couldn't understand that email address. Please tell me the email address where you want to send the SOS message.");
+            }
+          }
+        }, 600);
         return;
       }
 
-      // Debounce silence timer for interim speech
+      // Interim silence debounce
       if (silenceTimer) window.clearTimeout(silenceTimer);
       silenceTimer = window.setTimeout(() => {
-        if (voiceTokenRef.current === token && !handled) {
-          if (isValidEmail(candidate)) {
-            processCapturedSpeech(clean);
+        if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
+          const debouncedCandidate = convertSpokenToEmail(clean);
+          if (isValidEmail(debouncedCandidate)) {
+            handleEmailCaptured(debouncedCandidate);
           }
         }
       }, 1200);
     });
 
-    sttService.onError(() => {
-      if (voiceTokenRef.current === token && !handled) {
-        handled = true;
-        if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
-        if (silenceTimer) window.clearTimeout(silenceTimer);
-        sttService.stop();
-        retrySpokenEmail("I couldn't hear the email address clearly. Please say the email address again, or say 'go back'.");
-      }
-    });
-
+    sttUnsubRef.current = unsub;
     sttService.start().catch(() => {
       if (voiceTokenRef.current === token && !handled) {
         handled = true;
-        if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
-        if (silenceTimer) window.clearTimeout(silenceTimer);
+        stopListening();
         setVoiceSosPhase("error");
         setVoiceSosPromptText("Microphone access could not be started. Please type the email above.");
       }
     });
-  }, [activate, navigate, setContactEmail, showToast, stopVoiceSos]);
+  }, [handleCancelOrExit, navigate, showToast, stopListening]);
 
-  const retrySpokenEmail = useCallback(async (msg: string) => {
+  // Step 3: TTS: "Are you saying SanjayRagunath07@gmail.com?" -> Wait for TTS to finish -> Listen
+  const askForConfirmation = useCallback(async (emailToConfirm: string) => {
     const token = ++voiceTokenRef.current;
-    retryEmailCountRef.current++;
+    stopListening();
 
-    if (retryEmailCountRef.current > 4) {
-      setVoiceSosPhase("listening");
-      listenForSpokenEmail();
-      return;
-    }
+    setVoiceSosPhase("confirming");
+    const confirmPrompt = `Are you saying ${emailToConfirm}?`;
+    setVoiceSosPromptText(confirmPrompt);
 
-    setVoiceSosPhase("asking");
-    setVoiceSosPromptText(msg);
+    const spoke = await speakStrict(confirmPrompt, "emergency");
+    if (!spoke || voiceTokenRef.current !== token || unmountedRef.current) return;
 
-    try {
-      await tts.speak(msg, { priority: "alert", interrupt: true });
-    } catch {
-      // Ignore
-    }
+    listenForConfirmationRef.current(emailToConfirm);
+  }, [speakStrict, stopListening]);
 
-    if (voiceTokenRef.current === token) {
-      listenForSpokenEmail();
-    }
-  }, [listenForSpokenEmail]);
+  // Step 4: Listen for confirmation (Yes/Correct vs No+email vs Only No vs Cancel)
+  const listenForConfirmation = useCallback((emailToConfirm: string) => {
+    const token = voiceTokenRef.current;
+    stopListening();
 
-  const startVoiceEmailCollection = useCallback(async () => {
-    const token = ++voiceTokenRef.current;
-    sttService.stop();
-    tts.cancel();
-    setVoiceSosActive(true);
-    setVoiceSosPhase("asking");
-    retryEmailCountRef.current = 0;
+    setVoiceSosPhase("listening");
+    setVoiceSosPromptText(`Say 'Yes' to confirm, or 'No' to change email...`);
+    isListeningRef.current = true;
 
-    const promptMsg = "Emergency mode activated. Please tell me the email address where you want to send the SOS message.";
-    setVoiceSosPromptText(promptMsg);
+    let handled = false;
+    let silenceTimer: number | undefined;
 
-    try {
-      await tts.speak(promptMsg, { priority: "emergency", interrupt: true });
-    } catch {
-      // Ignore TTS failure
-    }
+    // Timeout if user says nothing
+    timeoutTimerRef.current = window.setTimeout(() => {
+      if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
+        handled = true;
+        stopListening();
+        void (async () => {
+          const retryMsg = `Please say yes to send to ${emailToConfirm}, or say no to change it.`;
+          setVoiceSosPromptText(retryMsg);
+          const spoke = await speakStrict(retryMsg, "emergency");
+          if (spoke && voiceTokenRef.current === token && !unmountedRef.current) {
+            listenForConfirmationRef.current(emailToConfirm);
+          }
+        })();
+      }
+    }, 10000);
 
-    if (voiceTokenRef.current !== token) return;
+    const unsub = sttService.subscribe((rawText, isFinal) => {
+      if (voiceTokenRef.current !== token || handled || !isListeningRef.current) return;
+      const clean = rawText.trim();
+      if (!clean) return;
 
-    // Strict sequence: TTS finished -> start STT listening
-    listenForSpokenEmail();
-  }, [listenForSpokenEmail]);
+      setSpokenEmailRaw(clean);
 
-  // Check if routed with voice=1 search param or if user triggered Voice SOS or visual profile
+      // Support "go back", "cancel", "close", "exit" at any point
+      if (/\b(go back|cancel|close|exit|shut down|quit)\b/i.test(clean)) {
+        handled = true;
+        stopListening();
+        handleCancelOrExit();
+        return;
+      }
+
+      const isNegative = /\b(no|nope|nah|wrong|incorrect|not that|not this)\b/i.test(clean);
+
+      // Check if user said No + corrected email
+      if (isNegative) {
+        const stripped = clean
+          .replace(/^(no|nope|nah|wrong|incorrect|not that|not this)\b/i, "")
+          .replace(/^(it is|its|it's|use|my email is|send to|please send to|the email is|change to|i mean|i meant)?\s*/i, "")
+          .trim();
+        const candidate = convertSpokenToEmail(stripped);
+
+        if (isValidEmail(candidate)) {
+          handled = true;
+          if (silenceTimer) window.clearTimeout(silenceTimer);
+          stopListening();
+          setDraftEmail(candidate);
+          setSaved(false);
+          showToast(`Updated email: ${candidate}`);
+          void askForConfirmationRef.current(candidate);
+          return;
+        }
+
+        // Only No
+        if (isFinal) {
+          handled = true;
+          if (silenceTimer) window.clearTimeout(silenceTimer);
+          stopListening();
+          void askForEmailRef.current("Please tell me the correct email address.");
+          return;
+        }
+
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        silenceTimer = window.setTimeout(() => {
+          if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
+            handled = true;
+            stopListening();
+            void askForEmailRef.current("Please tell me the correct email address.");
+          }
+        }, 800);
+        return;
+      }
+
+      // User said Yes / Correct
+      if (/\b(yes|yeah|yep|yup|correct|sure|send|send it|send the message|send sos|please send|confirm|confirmed|right|that's right|thats right|okay|ok)\b/i.test(clean)) {
+        handled = true;
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
+        stopListening();
+
+        void (async () => {
+          setVoiceSosPhase("sending");
+          setVoiceSosPromptText("Okay, I will send the SOS message.");
+          const spoke = await speakStrict("Okay, I will send the SOS message.", "emergency");
+          if (!spoke || voiceTokenRef.current !== token || unmountedRef.current) return;
+
+          // Prevent duplicate SOS sends
+          if (!hasSentSosRef.current) {
+            hasSentSosRef.current = true;
+            setVoiceSosPhase("sent");
+            setVoiceSosPromptText(`SOS alert dispatched to ${emailToConfirm}.`);
+            activate(emailToConfirm);
+          }
+        })();
+        return;
+      }
+
+      // Direct corrected email without saying "no"
+      const directCandidate = convertSpokenToEmail(clean);
+      if (isValidEmail(directCandidate) && directCandidate !== emailToConfirm) {
+        handled = true;
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        stopListening();
+        setDraftEmail(directCandidate);
+        setSaved(false);
+        showToast(`Updated email: ${directCandidate}`);
+        void askForConfirmationRef.current(directCandidate);
+        return;
+      }
+
+      if (isFinal) {
+        if (silenceTimer) window.clearTimeout(silenceTimer);
+        silenceTimer = window.setTimeout(() => {
+          if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
+            void (async () => {
+              const retryMsg = `Please say yes to send to ${emailToConfirm}, or say no to change it.`;
+              setVoiceSosPromptText(retryMsg);
+              const spoke = await speakStrict(retryMsg, "emergency");
+              if (spoke && voiceTokenRef.current === token && !unmountedRef.current) {
+                listenForConfirmationRef.current(emailToConfirm);
+              }
+            })();
+          }
+        }, 700);
+      }
+    });
+
+    sttUnsubRef.current = unsub;
+    sttService.start().catch(() => {
+      if (voiceTokenRef.current === token && !handled) {
+        handled = true;
+        stopListening();
+        setVoiceSosPhase("error");
+        setVoiceSosPromptText("Microphone access could not be started.");
+      }
+    });
+  }, [activate, handleCancelOrExit, showToast, speakStrict, stopListening]);
+
+  // Keep refs up to date
+  askForEmailRef.current = askForEmail;
+  listenForEmailRef.current = listenForEmail;
+  askForConfirmationRef.current = askForConfirmation;
+  listenForConfirmationRef.current = listenForConfirmation;
+
+  // Single mount effect: start fresh SOS session (clear email field) and ask for email once
   useEffect(() => {
-    const token = ++voiceTokenRef.current;
-    const isVoiceParam = typeof window !== "undefined" && (profile.visual || new URLSearchParams(window.location.search).get("voice") === "1");
+    unmountedRef.current = false;
+    hasSentSosRef.current = false;
 
-    if (isVoiceParam) {
-      void startVoiceEmailCollection();
-    }
+    // Reset email field on opening SOS - never reuse old email
+    setDraftEmail("");
+    setEmailStatus({ state: "idle", message: "" });
+    setSpokenEmailRaw("");
+
+    const timer = window.setTimeout(() => {
+      void askForEmailRef.current();
+    }, 400);
 
     return () => {
+      unmountedRef.current = true;
       voiceTokenRef.current++;
-      if (timeoutTimerRef.current) window.clearTimeout(timeoutTimerRef.current);
-      sttService.stop();
+      window.clearTimeout(timer);
+      stopListening();
       tts.cancel();
     };
-  }, [profile.visual, startVoiceEmailCollection]);
+  }, [stopListening]);
 
   const startHold = useCallback(() => {
     if (activated || holding) return;
@@ -1187,10 +1358,13 @@ export function EmergencyScreen() {
               variant={voiceSosPhase === "listening" ? "destructive" : "outline"}
               className="rounded-full text-xs font-bold gap-1"
               onClick={() => {
-                if (voiceSosPhase === "listening" || voiceSosPhase === "asking") {
-                  stopVoiceSos();
+                if (voiceSosPhase === "listening" || voiceSosPhase === "asking" || voiceSosPhase === "confirming") {
+                  voiceTokenRef.current++;
+                  stopListening();
+                  tts.cancel();
+                  setVoiceSosPhase("idle");
                 } else {
-                  void startVoiceEmailCollection();
+                  void askForEmail();
                 }
               }}
             >
@@ -1198,7 +1372,7 @@ export function EmergencyScreen() {
                 <>
                   <MicOff className="size-3.5" /> Stop Listening
                 </>
-              ) : voiceSosPhase === "asking" ? (
+              ) : (voiceSosPhase === "asking" || voiceSosPhase === "confirming" || voiceSosPhase === "sending") ? (
                 <>
                   <Volume2 className="size-3.5 animate-pulse" /> Speaking...
                 </>
