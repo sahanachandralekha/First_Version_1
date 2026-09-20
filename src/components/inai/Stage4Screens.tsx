@@ -1390,7 +1390,7 @@ export function EmergencyScreen() {
               <div className="flex items-center gap-2">
                 {voiceSosPhase === "asking" && <Volume2 className="size-4 shrink-0 text-primary animate-pulse" />}
                 {voiceSosPhase === "listening" && <Mic className="size-4 shrink-0 text-live animate-bounce" />}
-                {voiceSosPhase === "processing" && <span className="size-3.5 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+                {voiceSosPhase === "sending" && <span className="size-3.5 shrink-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
                 {voiceSosPhase === "confirming" && <Check className="size-4 shrink-0 text-green-600" />}
                 <p className="text-ink">
                   {voiceSosPromptText || "Ready to capture email via voice."}

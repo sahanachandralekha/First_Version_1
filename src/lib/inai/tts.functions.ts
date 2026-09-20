@@ -55,10 +55,10 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
     }
 
     // 1. Check ElevenLabs API Key in environment
-    const elevenKey = process.env.ELEVENLABS_API_KEY;
+    const elevenKey = process.env["ELEVENLABS_API_KEY"];
     if (elevenKey) {
       try {
-        const voiceId = process.env.ELEVENLABS_VOICE_ID || "21m00Tcm4TlvDq8ikWAM"; // Rachel
+        const voiceId = process.env["ELEVENLABS_VOICE_ID"] || "21m00Tcm4TlvDq8ikWAM"; // Rachel
         const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
           method: "POST",
           headers: {

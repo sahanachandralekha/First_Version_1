@@ -88,7 +88,7 @@ export class WebSpeechTTSService implements TTSService {
     try {
       await inaiAudioManager.speak(text, {
         priority: options.priority,
-        interrupt: options.interrupt,
+        ...(options.interrupt !== undefined ? { interrupt: options.interrupt } : {}),
       });
     } catch (err) {
       console.error("[INAI TTS] Audio playback failed:", err);

@@ -18,7 +18,7 @@ interface SpeechQueueItem {
   text: string;
   options: {
     priority: "emergency" | "alert" | "guidance" | "chat";
-    interrupt?: boolean;
+    interrupt?: boolean | undefined;
   };
   resolve: () => void;
   reject: (err: Error) => void;
@@ -102,7 +102,7 @@ class INAIAudioManagerClass {
     try {
       this.audio = new Audio();
       this.audio.preload = "auto";
-      this.audio.playsInline = true;
+      this.audio.setAttribute("playsinline", "true");
       this.initialized = true;
     } catch (err) {
       console.warn("[INAI Audio] Persistent HTMLAudioElement creation failed:", err);
@@ -241,7 +241,8 @@ class INAIAudioManagerClass {
    */
   public async playAudio(url: string, onEndedClean?: () => void): Promise<void> {
     await this.initialize();
-    if (!this.audio) {
+    const audio = this.audio;
+    if (!audio) {
       throw new Error("HTMLAudioElement is not initialized");
     }
 
@@ -249,10 +250,8 @@ class INAIAudioManagerClass {
       let settled = false;
 
       const cleanup = () => {
-        if (this.audio) {
-          this.audio.onended = null;
-          this.audio.onerror = null;
-        }
+        audio.onended = null;
+        audio.onerror = null;
         this.isPlaying = false;
         if (onEndedClean) {
           try {
@@ -281,19 +280,19 @@ class INAIAudioManagerClass {
       };
 
       try {
-        this.audio.pause();
-        this.audio.currentTime = 0;
-        this.audio.src = url;
-        this.audio.volume = 1.0;
+        audio.pause();
+        audio.currentTime = 0;
+        audio.src = url;
+        audio.volume = 1.0;
 
-        this.audio.onended = finishSuccess;
-        this.audio.onerror = () => {
-          const errCode = this.audio?.error ? this.audio.error.code : "unknown";
+        audio.onended = finishSuccess;
+        audio.onerror = () => {
+          const errCode = audio.error ? audio.error.code : "unknown";
           finishError(new Error(`HTMLAudioElement error code ${errCode}`));
         };
 
         this.isPlaying = true;
-        const playPromise = this.audio.play();
+        const playPromise = audio.play();
 
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
@@ -319,7 +318,7 @@ class INAIAudioManagerClass {
    */
   public async speak(
     text: string,
-    options?: { priority?: "emergency" | "alert" | "guidance" | "chat"; interrupt?: boolean },
+    options?: { priority?: "emergency" | "alert" | "guidance" | "chat"; interrupt?: boolean | undefined },
   ): Promise<void> {
     const clean = text.trim();
     if (!clean) return;
