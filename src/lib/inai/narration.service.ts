@@ -377,7 +377,7 @@ export class NarrationService {
    * and providing actionable guidance when synthesizing from local detection frames.
    */
   generateFallbackObservationDescription(
-    objects: Array<{ label: string; position?: "left" | "center" | "right"; approxDistance?: number; confidence?: number }>,
+    objects: Array<{ label: string; position?: "left" | "center" | "right" | undefined; approxDistance?: number | undefined; confidence?: number | undefined; [key: string]: any }>,
     pathStatus: PathStatus = "CLEAR"
   ): string {
     if (objects.length === 0) {

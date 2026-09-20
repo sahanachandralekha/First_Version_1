@@ -23,7 +23,24 @@ type QueueItem = { text: string; options: SpeakOptions; resolve: () => void; rej
 /** Voice settings are read from the accessibility store at speak time. */
 export interface VoiceSettings { rate: number; pitch: number; language: string }
 let voiceSettings: VoiceSettings = { rate: 1, pitch: 1, language: "en-IN" };
+let isVoiceActive = true;
+
 export function setVoiceSettings(next: Partial<VoiceSettings>) { voiceSettings = { ...voiceSettings, ...next }; }
+
+export function setTTSVoiceEnabled(enabled: boolean) {
+  isVoiceActive = enabled;
+  if (!enabled && typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // Ignore
+    }
+  }
+}
+
+export function getTTSVoiceEnabled(): boolean {
+  return isVoiceActive;
+}
 
 export class WebSpeechTTSService implements TTSService {
   readonly name = "Voice guidance"; readonly mode = "REAL" as const;
@@ -31,8 +48,11 @@ export class WebSpeechTTSService implements TTSService {
   callbacks: TTSCallbacks = {};
   private queue: QueueItem[] = [];
   private active = false;
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
+  private watchdogTimer: number | undefined = undefined;
 
   private pickVoice() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     const female = /female|heera|veena|swara|aditi|samantha|zira|google uk english female/i;
     return voices.find((v) => v.lang.toLowerCase() === "en-in" && female.test(v.name))
@@ -43,9 +63,14 @@ export class WebSpeechTTSService implements TTSService {
   }
 
   speak(text: string, options: SpeakOptions = { priority: "chat" }) {
+    // If voice assistance is disabled, display caption if available and do not vocalize
+    if (!isVoiceActive) {
+      this.callbacks.onCaption?.(text, options.priority);
+      return Promise.resolve();
+    }
+
     return new Promise<void>((resolve, reject) => {
       if (options.priority === "emergency") {
-        // emergency preempts and flushes every lower-priority utterance
         this.flush();
         this.cancel();
       } else if (options.interrupt) {
@@ -63,7 +88,18 @@ export class WebSpeechTTSService implements TTSService {
   }
 
   cancel() {
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    if (this.watchdogTimer) {
+      window.clearTimeout(this.watchdogTimer);
+      this.watchdogTimer = undefined;
+    }
+    this.activeUtterance = null;
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // Ignore
+      }
+    }
     lipSync.stop();
     this.callbacks.onMouth?.(0);
     this.active = false;
@@ -74,31 +110,73 @@ export class WebSpeechTTSService implements TTSService {
     const item = this.queue.shift();
     if (!item) return;
     if (!("speechSynthesis" in window)) {
-      // captions still carry the message when synthesis is unavailable
       this.callbacks.onCaption?.(item.text, item.options.priority);
       item.reject(new Error("Speech output is unavailable in this browser."));
       return;
     }
+
     this.active = true;
     const utterance = new SpeechSynthesisUtterance(item.text);
+    this.activeUtterance = utterance;
+
     utterance.voice = this.pickVoice();
     utterance.lang = voiceSettings.language;
     utterance.rate = item.options.rate ?? voiceSettings.rate;
     utterance.pitch = item.options.pitch ?? voiceSettings.pitch;
 
     lipSync.onFrame = (openness) => this.callbacks.onMouth?.(openness);
-    // every spoken utterance is also written to the caption region
     this.callbacks.onCaption?.(item.text, item.options.priority);
 
-    utterance.onstart = () => { this.callbacks.onStart?.(item.text); lipSync.startSynthetic(); };
+    let completed = false;
+    const onComplete = (err?: Error) => {
+      if (completed) return;
+      completed = true;
+      if (this.watchdogTimer) {
+        window.clearTimeout(this.watchdogTimer);
+        this.watchdogTimer = undefined;
+      }
+      this.activeUtterance = null;
+      this.finish();
+      if (err) item.reject(err);
+      else item.resolve();
+    };
+
+    utterance.onstart = () => {
+      this.callbacks.onStart?.(item.text);
+      lipSync.startSynthetic();
+    };
+
     utterance.onboundary = (event) => {
       this.callbacks.onBoundary?.(event);
       const word = item.text.slice(event.charIndex).split(/\s+/)[0] ?? "";
       lipSync.setWord(word);
     };
-    utterance.onerror = () => { this.finish(); item.reject(new Error("Voice guidance could not play.")); };
-    utterance.onend = () => { this.finish(); item.resolve(); };
-    window.speechSynthesis.speak(utterance);
+
+    utterance.onerror = () => {
+      onComplete(new Error("Voice guidance could not play."));
+    };
+
+    utterance.onend = () => {
+      onComplete();
+    };
+
+    // Watchdog timer: Guarantee finish() if browser fails to trigger onend
+    const wordCount = item.text.split(/\s+/).length;
+    const maxDurationMs = Math.max(4000, (wordCount / 2) * 1000 + 2500);
+    this.watchdogTimer = window.setTimeout(() => {
+      if (!completed) {
+        onComplete();
+      }
+    }, maxDurationMs);
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      onComplete(new Error("Speech synthesis error."));
+    }
   }
 
   private finish() {

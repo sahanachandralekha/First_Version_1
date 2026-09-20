@@ -155,11 +155,22 @@ export class WebSpeechSTTService implements ServiceDescriptor {
         try {
           this.recognition = this.createRecognition();
           this.recognition?.start();
-        } catch {
-          this.wantsRunning = false;
-          this.emitState(false);
+        } catch (err: any) {
+          if (err?.name === "InvalidStateError") return;
+          if (this.wantsRunning) {
+            this.restartTimer = window.setTimeout(() => {
+              if (this.wantsRunning) {
+                try {
+                  this.recognition = this.createRecognition();
+                  this.recognition?.start();
+                } catch {
+                  /* continue retry on next event */
+                }
+              }
+            }, 300);
+          }
         }
-      }, 150);
+      }, 100);
     };
 
     recognition.onerror = (event) => {

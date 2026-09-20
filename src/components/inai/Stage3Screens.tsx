@@ -12,12 +12,13 @@ import { BottomNavigation } from "@/components/layout/BottomNavigation";
 import { INAIAvatar } from "@/components/inai/INAIAvatar";
 import { CaptionRegion } from "@/components/inai/CaptionRegion";
 import { ModeBadge } from "@/components/inai/ModeBadge";
-import { CameraStage, type CameraStageHandle } from "@/components/inai/CameraStage";
+import { CameraStage, type CameraStageHandle, type StageBox } from "@/components/inai/CameraStage";
 import { ErrorState } from "@/components/shared/states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useINAIVoice } from "@/hooks/use-inai-voice";
+import { ttsService, setTTSVoiceEnabled } from "@/services/tts";
 import { useAccessibilityStore } from "@/stores/accessibility-store";
 import { contextEngine } from "@/services/context-engine";
 import { routeDirective } from "@/services/output-router";
@@ -93,6 +94,9 @@ function useDirectiveRouter() {
 export function VisionScreen() {
   const { speak, cancel, speaking, mouthOpenness } = useINAIVoice();
   const profile = useAccessibilityStore((state) => state.profile);
+  const prefs = useAccessibilityStore((state) => state.prefs);
+  const setNeed = useAccessibilityStore((state) => state.setNeed);
+  const setPreference = useAccessibilityStore((state) => state.setPreference);
   const [detections, setDetections] = useState<VisionDetection[]>([]);
   const [frameWidth, setFrameWidth] = useState(0);
   const [cameraActive, setCameraActive] = useState(true);
@@ -270,6 +274,45 @@ export function VisionScreen() {
     };
   }, [cancel]);
 
+  // Listen for mode confirmation from InitialVisualQuestionDialog or custom event
+  useEffect(() => {
+    const handleModeChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ answer: "yes" | "no" }>;
+      if (customEvent.detail?.answer === "yes") {
+        setLine("Visually Impaired Mode active. Full voice assistance enabled.");
+        void startContinuousConversation();
+      } else if (customEvent.detail?.answer === "no") {
+        setContinuousMode(false);
+        continuousModeRef.current = false;
+        setListeningVoice(false);
+        sttService.stop();
+        cancel();
+        setLine("Standard visual mode active. Voice assistance is turned off.");
+      }
+    };
+    window.addEventListener("inai:visual_impairment_confirmed", handleModeChange);
+    return () => {
+      window.removeEventListener("inai:visual_impairment_confirmed", handleModeChange);
+    };
+  }, [cancel]);
+
+  // Auto-start continuous conversation on mount for Visually Impaired mode if answered YES and voiceEnabled is true
+  useEffect(() => {
+    let timer: number | undefined;
+    const answered = typeof window !== "undefined" ? (localStorage.getItem("inai_visually_impaired_answered") || sessionStorage.getItem("inai_visually_impaired_choice")) : null;
+    const isVoiceNav = typeof window !== "undefined" && ((profile.visual && prefs.voiceEnabled) || answered === "yes");
+    if (isVoiceNav) {
+      setCameraActive(true);
+      cameraActiveRef.current = true;
+      timer = window.setTimeout(() => {
+        void startContinuousConversation();
+      }, 600);
+    }
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [profile.visual, prefs.voiceEnabled]);
+
   const handleDetections = useCallback((next: VisionDetection[], frame: { width: number; height: number }) => {
     detectionsRef.current = next;
     frameDimRef.current = frame;
@@ -396,8 +439,8 @@ export function VisionScreen() {
         const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         setLatestObstacle({ text, time: timeStr, tone: "warn" });
 
-        // Announce spoken alert if unmuted and voice channel is free
-        if (!obstacleMutedRef.current && !speakingRef.current && !listeningVoiceRef.current && !processingRef.current) {
+        // Announce spoken alert if unmuted, voice is enabled, and voice channel is free
+        if (prefs.voiceEnabled && !obstacleMutedRef.current && !speakingRef.current && !listeningVoiceRef.current && !processingRef.current) {
           isSpeakingObstacleRef.current = true;
           void speak(text, "alert").finally(() => {
             isSpeakingObstacleRef.current = false;
@@ -824,15 +867,19 @@ export function VisionScreen() {
   const resumeListening = () => {
     if (!isSpeechRecognitionSupported()) return;
     if (!continuousModeRef.current) return;
-    if (speakingRef.current) return;
-
     setListeningVoice(true);
     setSttError(null);
     sttService.start().catch((err) => {
       console.warn("Could not resume listening:", err);
-      setListeningVoice(false);
     });
   };
+
+  // Automatically keep microphone active whenever TTS stops speaking in continuous mode
+  useEffect(() => {
+    if (!speaking && continuousModeRef.current && !listeningVoice && !processingVoice) {
+      resumeListening();
+    }
+  }, [speaking, listeningVoice, processingVoice]);
 
   const handleUserUtterance = async (queryText: string) => {
     const cleanQuery = queryText.trim();
@@ -857,6 +904,61 @@ export function VisionScreen() {
       if (continuousModeRef.current) {
         resumeListening();
       }
+      return;
+    }
+
+    // Go back command: Navigate to previous menu and explain what is there
+    if (/\b(go back|back|previous page|previous screen|previous)\b/i.test(cleanQuery)) {
+      cancel();
+      activeRequestTokenRef.current++;
+      const backMsg = "Returning to main menu. You are on the home screen. You can choose Two-Way Communication, Navigation Guide, or SOS Emergency. What would you like to do?";
+      await speak(backMsg, "guidance");
+      void navigate({ to: "/" });
+      return;
+    }
+
+    // Close the app command: Stop voice and exit
+    if (/\b(close the app|close app|exit app|exit the app|quit the app|quit app|shut down app|turn off)\b/i.test(cleanQuery)) {
+      cancel();
+      activeRequestTokenRef.current++;
+      endContinuousConversation();
+      setCameraActive(false);
+      await speak("Closing the app. Voice assistance is now off.", "guidance");
+      void navigate({ to: "/home" });
+      return;
+    }
+
+    // Explain screen command
+    if (/\b(explain what is in that|explain this screen|explain this page|explain page|what is this|where am i|help)\b/i.test(cleanQuery)) {
+      const explainMsg = "You are in Two-Way Communication. The camera is active and scanning your surroundings. You can ask what is in front of you, find an object, read visible text, or identify banknotes. You can also say 'go back' to return to the main menu, or say 'close the app' to exit.";
+      setLine(explainMsg);
+      await speak(explainMsg, "guidance");
+      if (continuousModeRef.current) {
+        resumeListening();
+      }
+      return;
+    }
+
+    // Direct voice navigation shortcuts
+    if (/\b(navigation guide|navigation|guide me|switch to navigation|open navigation|take me to navigation)\b/i.test(cleanQuery)) {
+      cancel();
+      activeRequestTokenRef.current++;
+      await speak("Opening navigation guide camera.", "guidance");
+      void navigate({ to: "/guidance" });
+      return;
+    }
+    if (/\b(emergency|sos|help me|call for help)\b/i.test(cleanQuery)) {
+      cancel();
+      activeRequestTokenRef.current++;
+      await speak("Opening SOS emergency.", "guidance");
+      void navigate({ to: "/emergency" });
+      return;
+    }
+    if (/\b(home|exit|go home|back to home)\b/i.test(cleanQuery)) {
+      cancel();
+      activeRequestTokenRef.current++;
+      await speak("Returning to home screen.", "guidance");
+      void navigate({ to: "/home" });
       return;
     }
 
@@ -1017,15 +1119,17 @@ export function VisionScreen() {
       setRecognizedVoiceQuery(trimmed);
 
       if (isFinal) {
-        // Pause STT during request execution to prevent self-echo
-        sttService.stop();
-        setListeningVoice(false);
         void handleUserUtterance(trimmed);
       }
     });
   };
 
   const startContinuousConversation = async () => {
+    if (!useAccessibilityStore.getState().prefs.voiceEnabled) {
+      setLine("Voice assistance is turned off. Tap 'Turn Voice On' above to enable full voice assistance.");
+      return;
+    }
+
     if (!isSpeechRecognitionSupported()) {
       setSttError("Speech recognition is not supported in this browser. Please use the text input below.");
       return;
@@ -1035,7 +1139,9 @@ export function VisionScreen() {
     continuousModeRef.current = true;
     setSttError(null);
     setListeningVoice(true);
-    const welcome = "Two-way conversation active. I'm listening. Ask me what is in front of you, or ask to find an object.";
+    setCameraActive(true);
+    cameraActiveRef.current = true;
+    const welcome = "Two-way communication is active. The camera is on. You can ask me what is in front of you, ask me to find an object, read visible text, or identify banknotes. What would you like to check?";
     setLine(welcome);
     void speak(welcome, "guidance");
 
@@ -1170,6 +1276,113 @@ export function VisionScreen() {
         }
       />
       <div className="flex-1 space-y-4 px-5 pb-24 pt-3">
+        {/* Visual Impairment / Voice Assistance Status & Quick-Switch Banner */}
+        <section
+          aria-label="Voice assistance mode settings"
+          className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-card border p-3.5 shadow-sm transition-colors ${
+            prefs.voiceEnabled
+              ? "border-primary/40 bg-primary-tint/50 text-foreground"
+              : "border-border bg-card text-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className={`grid size-9 shrink-0 place-items-center rounded-lg ${
+                prefs.voiceEnabled
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {prefs.voiceEnabled ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-primary">
+                  {prefs.voiceEnabled
+                    ? "Visually Impaired Mode: Voice Assisted"
+                    : "Standard Mode: No Voice Assistance"}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                    prefs.voiceEnabled
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {prefs.voiceEnabled ? "VOICE ON" : "VOICE OFF"}
+                </span>
+              </div>
+              <p className="text-[11px] font-medium text-muted-foreground">
+                {prefs.voiceEnabled
+                  ? "Continuous two-way conversation, spoken scene description, obstacle & currency reading active."
+                  : "Silent visual mode. Voice assistance is turned off after selecting No."}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <Button
+              type="button"
+              size="sm"
+              variant={prefs.voiceEnabled ? "outline" : "default"}
+              onClick={() => {
+                if (prefs.voiceEnabled) {
+                  setNeed("visual", false);
+                  setPreference("voiceEnabled", false);
+                  setTTSVoiceEnabled(false);
+                  ttsService.cancel();
+                  sttService.stop();
+                  setContinuousMode(false);
+                  setListeningVoice(false);
+                  try {
+                    localStorage.setItem("inai_visually_impaired_answered", "no");
+                  } catch {}
+                  setLine("Standard visual mode active. Voice assistance is turned off.");
+                } else {
+                  setNeed("visual", true);
+                  setPreference("voiceEnabled", true);
+                  setTTSVoiceEnabled(true);
+                  try {
+                    localStorage.setItem("inai_visually_impaired_answered", "yes");
+                  } catch {}
+                  setLine("Visually Impaired Mode active. Full voice assistance enabled.");
+                  void speak("Visually impaired mode activated. Full voice assistance is enabled.", "alert");
+                  void startContinuousConversation();
+                }
+              }}
+              className="h-8 rounded-full text-xs font-bold gap-1.5 shadow-sm"
+              aria-label={prefs.voiceEnabled ? "Turn off voice assistance" : "Turn on voice assistance"}
+            >
+              {prefs.voiceEnabled ? (
+                <>
+                  <VolumeX className="size-3.5 text-muted-foreground" />
+                  <span>Turn Voice Off</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="size-3.5" />
+                  <span>Turn Voice On</span>
+                </>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("inai:ask_visual_impairment"));
+                }
+              }}
+              className="h-8 rounded-full text-xs font-semibold text-muted-foreground hover:text-foreground"
+              title="Re-ask 'Are you visually impaired?'"
+            >
+              Ask Again
+            </Button>
+          </div>
+        </section>
+
         {/* Camera Stage with stream toggle and frame capture ref */}
         <CameraStage
           ref={cameraRef}
@@ -2931,57 +3144,262 @@ const guidanceSteps: Array<{ line: string; gesture: string }> = [
 ];
 
 export function GuidanceScreen() {
-  const { speak, speaking, mouthOpenness, caption, critical } = useINAIVoice();
+  const { speak, cancel, speaking, mouthOpenness, caption, critical } = useINAIVoice();
   const [step, setStep] = useState(0);
-  const current = guidanceSteps[step] ?? guidanceSteps[0]!;
+  const [detections, setDetections] = useState<VisionDetection[]>([]);
+  const [frameBox, setFrameBox] = useState<StageBox>({ width: 640, height: 480 });
+  const [guidanceLine, setGuidanceLine] = useState("The path is clear ahead. Keep walking at your own pace.");
+  const [guidanceGesture, setGuidanceGesture] = useState("open_palms");
+  const [activeChips, setActiveChips] = useState<string[]>(["Path clear ahead", "Camera active"]);
+  const navigate = useNavigate();
 
-  useEffect(() => { void speak(current.line, "guidance"); }, [current.line, speak]);
+  const detectionsRef = useRef<VisionDetection[]>([]);
+  const frameBoxRef = useRef<StageBox>({ width: 640, height: 480 });
+  const isSpeakingGuidanceRef = useRef(false);
+  const lastAnnouncedSectorRef = useRef<Record<string, number>>({});
+  const lastAnnouncedTextRef = useRef<string>("");
+  const lastClearAnnouncementRef = useRef<number>(0);
+  const guidanceTimerRef = useRef<number | undefined>(undefined);
+  const sttActiveRef = useRef<boolean>(true);
+
+  const handleGuidanceDetections = useCallback((next: VisionDetection[], frame: StageBox) => {
+    detectionsRef.current = next;
+    frameBoxRef.current = frame;
+    setDetections(next);
+    setFrameBox(frame);
+  }, []);
+
+  // Continuous speech recognition loop
+  const startContinuousListening = useCallback(() => {
+    if (!isSpeechRecognitionSupported()) return;
+
+    sttService.onError((problem) => {
+      if (problem === "no-speech" && sttActiveRef.current) {
+        // Normal pause, silently restart listening
+        sttService.start().catch(() => undefined);
+      }
+    });
+
+    sttService.subscribe((raw, isFinal) => {
+      if (!sttActiveRef.current) return;
+      const text = raw.toLowerCase().trim();
+      if (!text) return;
+
+      // Barge-in: if user is speaking, stop TTS
+      if (speaking) {
+        cancel();
+        isSpeakingGuidanceRef.current = false;
+      }
+
+      // Check intent
+      if (/\b(two[- ]?way communication|communication|two[- ]?way|switch to communication|talk|camera)\b/i.test(text)) {
+        sttActiveRef.current = false;
+        sttService.stop();
+        cancel();
+        void speak("Opening two-way communication camera.", "guidance");
+        void navigate({ to: "/vision" });
+      } else if (/\b(where am i|location|where)\b/i.test(text)) {
+        void speak("You are in the main corridor, near the east entrance. Path ahead is clear.", "guidance");
+      } else if (/\b(what's ahead|whats ahead|ahead|guide me|is it clear|path|next|continue)\b/i.test(text)) {
+        const nonPath = detectionsRef.current.filter((d) => d.rawClass !== "pathway");
+        const primary = nonPath[0];
+        if (primary) {
+          const desc = `I detect a ${primary.label} approximately ${Math.round(primary.approxDistance)} meters ahead. Please proceed with caution.`;
+          setGuidanceLine(desc);
+          void speak(desc, "guidance");
+        } else {
+          const clearMsg = "The path is clear ahead. There are no immediate obstacles detected.";
+          setGuidanceLine(clearMsg);
+          void speak(clearMsg, "guidance");
+        }
+      } else if (/\b(emergency|sos|help|danger)\b/i.test(text)) {
+        sttActiveRef.current = false;
+        sttService.stop();
+        cancel();
+        void speak("Opening SOS emergency.", "guidance");
+        void navigate({ to: "/emergency" });
+      } else if (/\b(repeat|say again|again)\b/i.test(text)) {
+        void speak(guidanceLine, "guidance");
+      } else if (/\b(go back|back|previous page|previous screen|previous)\b/i.test(text)) {
+        sttActiveRef.current = false;
+        sttService.stop();
+        cancel();
+        const backMsg = "Returning to main menu. You are on the home screen. You can choose Two-Way Communication, Navigation Guide, or SOS Emergency. What would you like to do?";
+        void speak(backMsg, "guidance");
+        void navigate({ to: "/" });
+      } else if (/\b(close the app|close app|exit app|exit the app|quit the app|quit|shut down app)\b/i.test(text)) {
+        sttActiveRef.current = false;
+        sttService.stop();
+        cancel();
+        void speak("Closing the app. Voice assistance is now off.", "guidance");
+        void navigate({ to: "/home" });
+      } else if (/\b(explain what is in that|explain this screen|explain this page|explain page|what is this)\b/i.test(text)) {
+        const explainMsg = "You are in Navigation Guide. The camera is active and guiding your walking path. I will alert you to obstacles and guide you step by step. You can say 'what's ahead', 'two-way communication', or 'go back'.";
+        setGuidanceLine(explainMsg);
+        void speak(explainMsg, "guidance");
+      }
+    });
+
+    sttService.start().catch(() => undefined);
+  }, [cancel, guidanceLine, navigate, speak, speaking]);
+
+  useEffect(() => {
+    sttActiveRef.current = true;
+    const initialText = "Navigation guide activated. The camera is on. I am monitoring your path ahead and will guide you step by step. The path is clear ahead. Keep walking straight at your comfortable pace.";
+    void speak(initialText, "guidance");
+
+    // Start voice listening
+    const listenTimer = window.setTimeout(() => {
+      startContinuousListening();
+    }, 800);
+
+    // Automated periodic obstacle & path guidance loop (every 3 seconds)
+    guidanceTimerRef.current = window.setInterval(() => {
+      if (!sttActiveRef.current) return;
+      if (isSpeakingGuidanceRef.current || speaking) return;
+
+      const nonPath = detectionsRef.current.filter((d) => d.rawClass !== "pathway");
+      const now = Date.now();
+
+      if (nonPath.length > 0) {
+        // Sort by closest obstacle
+        const sorted = [...nonPath].sort((a, b) => {
+          const aBottom = a.box.y + a.box.height;
+          const bBottom = b.box.y + b.box.height;
+          return bBottom - aBottom;
+        });
+        const primary = sorted[0];
+        if (!primary) return;
+        const { text, sectorKey } = describeImageSpaceObstacle(primary, frameBoxRef.current, nonPath);
+        const lastSpokenForSector = lastAnnouncedSectorRef.current[sectorKey] || 0;
+
+        setActiveChips(nonPath.slice(0, 4).map((d) => `${d.label} ~${Math.round(d.approxDistance)}m`));
+
+        let directionalCue = text;
+        let gesture = "stop_palm";
+        if (sectorKey.includes("left")) {
+          directionalCue = `Attention: ${primary.label} on your left. Please steer slightly to your right.`;
+          gesture = "point_right";
+        } else if (sectorKey.includes("right")) {
+          directionalCue = `Attention: ${primary.label} on your right. Please steer slightly to your left.`;
+          gesture = "point_left";
+        } else {
+          directionalCue = `Caution: ${primary.label} directly ahead. Please slow down and proceed carefully.`;
+          gesture = "stop_palm";
+        }
+
+        setGuidanceLine(directionalCue);
+        setGuidanceGesture(gesture);
+
+        if (now - lastSpokenForSector > 7000) {
+          lastAnnouncedSectorRef.current[sectorKey] = now;
+          lastAnnouncedTextRef.current = directionalCue;
+          isSpeakingGuidanceRef.current = true;
+          void speak(directionalCue, "alert").finally(() => {
+            isSpeakingGuidanceRef.current = false;
+          });
+        }
+      } else {
+        setActiveChips(["Path clear ahead", "Obstacles: 0", "Camera active"]);
+        const clearMsg = "The path is clear ahead. Keep walking straight at your comfortable pace.";
+        setGuidanceLine(clearMsg);
+        setGuidanceGesture("open_palms");
+
+        if (lastAnnouncedTextRef.current !== clearMsg && (now - lastClearAnnouncementRef.current > 12000)) {
+          lastAnnouncedTextRef.current = clearMsg;
+          lastClearAnnouncementRef.current = now;
+          isSpeakingGuidanceRef.current = true;
+          void speak(clearMsg, "guidance").finally(() => {
+            isSpeakingGuidanceRef.current = false;
+          });
+        }
+      }
+    }, 3000);
+
+    return () => {
+      sttActiveRef.current = false;
+      if (guidanceTimerRef.current) window.clearInterval(guidanceTimerRef.current);
+      if (listenTimer) window.clearTimeout(listenTimer);
+      sttService.stop();
+      cancel();
+      isSpeakingGuidanceRef.current = false;
+    };
+  }, [cancel, speak, startContinuousListening]);
 
   return (
     <Page nav={false}>
       <div className="relative flex-1 overflow-hidden">
         <h1 className="sr-only">Guidance Mode</h1>
-        <div className="absolute inset-0 opacity-45"><CameraStage height="h-full" showControls={false} /></div>
-        <div className="relative flex h-full flex-col justify-between p-4">
+        <div className="absolute inset-0 opacity-85">
+          <CameraStage height="h-full" showControls={false} active={true} onDetections={handleGuidanceDetections} />
+        </div>
+        <div className="relative flex h-full flex-col justify-between p-4 bg-gradient-to-t from-background via-background/60 to-transparent">
           <div className="flex items-start">
-            <Button asChild variant="secondary" className="rounded-full"><Link to="/home"><X className="size-4" />Exit</Link></Button>
+            <Button asChild variant="secondary" className="rounded-full shadow-md backdrop-blur-md bg-background/80">
+              <Link to="/home"><X className="size-4 mr-1" />Exit</Link>
+            </Button>
             <span className="ml-auto flex flex-col items-end gap-1">
-              <span className="rounded-full bg-primary px-3 py-1 text-xs font-extrabold text-primary-foreground">{speaking ? "INAI Speaking" : "INAI Ready"}</span>
-              <span className="rounded-full bg-background px-3 py-1 text-xs font-extrabold text-primary">Guidance Mode</span>
+              <span className="rounded-full bg-primary px-3 py-1 text-xs font-extrabold text-primary-foreground shadow">
+                {speaking ? "INAI Guiding…" : "INAI Listening"}
+              </span>
+              <span className="rounded-full bg-background/90 backdrop-blur-sm px-3 py-1 text-xs font-extrabold text-primary shadow">
+                Camera Live • Auto-Guiding
+              </span>
             </span>
           </div>
+
           <div className="flex items-end gap-2">
-            <div className="w-40 shrink-0"><INAIAvatar state={speaking ? "speaking" : "guiding"} gesture={current.gesture} mouthOpenness={mouthOpenness} size="lg" /></div>
-            <div className="flex-1">
-              <div className="rounded-card bg-background/95 p-3 text-sm font-semibold shadow-inai">{current.line}</div>
-              <h2 className="mt-3 text-2xl font-extrabold text-background drop-shadow">You're not alone.</h2>
-              <p className="text-sm font-semibold text-background/90 drop-shadow">INAI guides you, step by step.</p>
+            <div className="w-40 shrink-0">
+              <INAIAvatar state={speaking ? "speaking" : "guiding"} gesture={guidanceGesture} mouthOpenness={mouthOpenness} size="lg" />
             </div>
-            <div className="flex w-28 shrink-0 flex-col gap-1 text-[11px] font-bold">
-              {["Staircase", "Staircase ~3 m", "People on right", "Path clear ahead"].map((chip) => (
-                <span key={chip} className="rounded-full bg-background/90 px-2 py-1 text-center">{chip}</span>
+            <div className="flex-1">
+              <div className="rounded-card bg-background/95 p-3 text-sm font-semibold shadow-inai backdrop-blur-md">
+                {guidanceLine}
+              </div>
+              <h2 className="mt-3 text-2xl font-extrabold text-foreground drop-shadow">You're not alone.</h2>
+              <p className="text-sm font-semibold text-foreground/90 drop-shadow">INAI guides you automatically, step by step.</p>
+            </div>
+            <div className="flex w-32 shrink-0 flex-col gap-1 text-[11px] font-bold">
+              {activeChips.map((chip) => (
+                <span key={chip} className="rounded-full bg-background/90 backdrop-blur-sm px-2 py-1 text-center shadow-sm border border-border/50">
+                  {chip}
+                </span>
               ))}
             </div>
           </div>
+
           <div className="mt-3 space-y-3">
-            <section className="rounded-card bg-background p-4 shadow-inai">
+            <section className="rounded-card bg-background/95 backdrop-blur-md p-4 shadow-inai border border-border/50">
               <div className="flex items-start gap-2">
-                <p className="flex-1 text-lg font-extrabold leading-snug">{current.line}</p>
-                <Button size="icon" variant="ghost" aria-label="Replay guidance" onClick={() => void speak(current.line, "guidance")}><Volume2 /></Button>
-              </div>
-              <div className="mt-3 flex justify-center gap-2" aria-label={`Step ${step + 1} of ${guidanceSteps.length}`}>
-                {guidanceSteps.map((item, index) => <span key={item.line} className={`size-2 rounded-full ${index === step ? "bg-primary" : "bg-line"}`} />)}
+                <p className="flex-1 text-lg font-extrabold leading-snug">{guidanceLine}</p>
+                <Button size="icon" variant="ghost" aria-label="Replay guidance" onClick={() => void speak(guidanceLine, "guidance")}>
+                  <Volume2 />
+                </Button>
               </div>
             </section>
             <ActionRow actions={[
-              [<Compass key="w" className="size-5" />, "Where am I?", () => void speak("You are in the main corridor, near the east entrance.", "guidance")],
-              [<Eye key="a" className="size-5" />, "What's ahead?", () => setStep((value) => (value + 1) % guidanceSteps.length)],
-              [<Repeat key="r" className="size-5" />, "Repeat that", () => void speak(current.line, "guidance")],
+              [<Compass key="w" className="size-5" />, "Where am I?", () => void speak("You are in the main corridor, near the east entrance. Path ahead is clear.", "guidance")],
+              [<Eye key="a" className="size-5" />, "What's ahead?", () => {
+                const nonPath = detectionsRef.current.filter((d) => d.rawClass !== "pathway");
+                const firstObstacle = nonPath[0];
+                if (firstObstacle) {
+                  void speak(`Ahead of you is a ${firstObstacle.label} approximately ${Math.round(firstObstacle.approxDistance)} meters away.`, "guidance");
+                } else {
+                  void speak("The path is clear ahead.", "guidance");
+                }
+              }],
+              [<Repeat key="r" className="size-5" />, "Repeat that", () => void speak(guidanceLine, "guidance")],
             ]} />
             <div className="grid grid-cols-3 gap-2">
-              <Button asChild variant="secondary" className="min-h-12 rounded-full text-xs font-extrabold"><Link to="/vision/live"><Camera className="size-4" />Show Camera</Link></Button>
-              <Button asChild className="min-h-12 rounded-full text-xs font-extrabold"><Link to="/inai"><MessageCircle className="size-4" />Talk to INAI</Link></Button>
-              <Button asChild variant="destructive" className="min-h-12 rounded-full text-xs font-extrabold"><Link to="/emergency"><ShieldAlert className="size-4" />Emergency</Link></Button>
+              <Button asChild variant="secondary" className="min-h-12 rounded-full text-xs font-extrabold">
+                <Link to="/vision"><Camera className="size-4 mr-1" />Two-Way Vision</Link>
+              </Button>
+              <Button asChild className="min-h-12 rounded-full text-xs font-extrabold">
+                <Link to="/inai"><MessageCircle className="size-4 mr-1" />Talk to INAI</Link>
+              </Button>
+              <Button asChild variant="destructive" className="min-h-12 rounded-full text-xs font-extrabold">
+                <Link to="/emergency"><ShieldAlert className="size-4 mr-1" />Emergency</Link>
+              </Button>
             </div>
           </div>
         </div>

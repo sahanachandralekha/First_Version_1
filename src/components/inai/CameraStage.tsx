@@ -170,6 +170,16 @@ export const CameraStage = forwardRef<CameraStageHandle, CameraStageProps>(funct
     return () => observer.disconnect();
   }, []);
 
+  const onDetectionsRef = useRef(onDetections);
+  useEffect(() => {
+    onDetectionsRef.current = onDetections;
+  }, [onDetections]);
+
+  const onFrameRef = useRef(onFrame);
+  useEffect(() => {
+    onFrameRef.current = onFrame;
+  }, [onFrame]);
+
   useEffect(() => {
     if (!active) {
       visionService.stop();
@@ -180,26 +190,54 @@ export const CameraStage = forwardRef<CameraStageHandle, CameraStageProps>(funct
 
     const video = videoRef.current;
     if (!video) return;
+
+    let cancelled = false;
+    let retryTimer: number | undefined;
+
     const offStatus = visionService.onStatus(setStatus);
     const offDetections = visionService.onDetections((next) => {
-      const nextFrame = { width: video.videoWidth, height: video.videoHeight };
+      if (cancelled) return;
+      const nextFrame = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
       setDetections(next);
       setFrame(nextFrame);
-      onFrame?.(nextFrame);
-      onDetections?.(next, nextFrame);
+      onFrameRef.current?.(nextFrame);
+      onDetectionsRef.current?.(next, nextFrame);
     });
+
     setFailed(false);
-    visionService.start(video, { facingMode: facing }).then(() => {
-      setMirrored(visionService.mirrored);
-      setFacing(visionService.facingMode);
-    }).catch(() => setFailed(true));
+
+    const startCameraWithRetry = async (retries = 2) => {
+      try {
+        await visionService.start(video, { facingMode: facing });
+        if (cancelled) return;
+        setMirrored(visionService.mirrored);
+        setFacing(visionService.facingMode);
+        setFailed(false);
+      } catch (err) {
+        if (cancelled) return;
+        console.warn("Camera auto-start attempt error:", err);
+        if (retries > 0) {
+          retryTimer = window.setTimeout(() => {
+            if (!cancelled) {
+              void startCameraWithRetry(retries - 1);
+            }
+          }, 300);
+        } else {
+          setFailed(true);
+        }
+      }
+    };
+
+    void startCameraWithRetry();
 
     return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
       offStatus();
       offDetections();
       visionService.stop();
     };
-  }, [attempt, onDetections, onFrame, active, facing]);
+  }, [attempt, active, facing]);
 
   const handleFlip = async () => {
     const video = videoRef.current;

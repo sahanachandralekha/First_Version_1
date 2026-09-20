@@ -98,22 +98,43 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
 
   async acquireStream(video: HTMLVideoElement) {
     if (this.stream) {
-      this.stream.getTracks().forEach((track) => track.stop());
+      try {
+        this.stream.getTracks().forEach((track) => track.stop());
+      } catch {
+        /* ignore */
+      }
       this.stream = undefined;
     }
 
     try {
       if (this.facingMode === "environment") {
         try {
-          this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: "environment" } }, audio: false });
+          this.stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false,
+          });
           this.facingUser = false;
         } catch {
-          this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+          this.stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
           this.facingUser = false;
         }
       } else {
-        this.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-        this.facingUser = true;
+        try {
+          this.stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "user" } },
+            audio: false,
+          });
+          this.facingUser = true;
+        } catch {
+          this.stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+          this.facingUser = true;
+        }
       }
     } catch {
       this.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
@@ -121,8 +142,14 @@ export class BrowserVisionDetectionService implements ServiceDescriptor {
     }
 
     video.srcObject = this.stream;
+    video.muted = true;
+    video.setAttribute("playsinline", "true");
     video.style.transform = this.mirrored ? "scaleX(-1)" : "none";
-    await video.play();
+    try {
+      await video.play();
+    } catch (playErr) {
+      console.warn("video.play() deferred until direct interaction:", playErr);
+    }
   }
 
   async flipCamera(video: HTMLVideoElement) {

@@ -10,36 +10,41 @@ import { Button } from "@/components/ui/button";
 import { useAccessibilityStore } from "@/stores/accessibility-store";
 import { ttsService } from "@/services/tts";
 import { hapticService } from "@/services/haptics";
+import { AccessibilityStartupFlow } from "@/components/inai/AccessibilityStartupFlow";
 
 const footer = <p className="py-5 text-center text-[10px] font-bold uppercase text-muted-foreground">People · Access · Opportunities · Together</p>;
 
 export function SplashScreen() {
   const navigate = useNavigate();
   const reducedMotion = useAccessibilityStore((state) => state.prefs.reducedMotion);
+
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
-    void Promise.resolve(useAccessibilityStore.persist.rehydrate()).then(() => {
-      timer = window.setTimeout(() => {
-        if (!cancelled) void navigate({ to: useAccessibilityStore.getState().onboarded ? "/home" : "/onboarding/intro" });
-      }, 2200);
-    });
-    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
-  }, [navigate]);
+    void Promise.resolve(useAccessibilityStore.persist.rehydrate());
+  }, []);
+
   return (
     <AppShell>
-      <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-8 text-center">
+      <div className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-6 text-center">
         <h1 className="sr-only">INAI accessibility companion</h1>
-        <ScriptNote className="left-8 top-16 text-3xl">Hi! I’m INAI</ScriptNote>
-        <ScriptNote className="right-8 top-28 text-xl">Here for you, always</ScriptNote>
-        <InaiSparkles className="right-10 top-20" />
+        <ScriptNote className="left-8 top-12 text-3xl">Hi! I’m INAI</ScriptNote>
+        <ScriptNote className="right-8 top-20 text-xl">Here for you, always</ScriptNote>
+        <InaiSparkles className="right-10 top-16" />
         <INAIAvatar state="idle" size="full" />
-        <p aria-hidden="true" className="text-6xl font-extrabold text-primary">INAI</p>
-        <p className="mt-2 text-lg text-muted-foreground">Your intelligent accessibility companion</p>
-        <div className="mt-8 h-2 w-60 overflow-hidden rounded-chip bg-primary-tint" aria-label="Loading INAI">
+        <p aria-hidden="true" className="text-5xl font-extrabold text-primary">INAI</p>
+        <p className="mt-1 text-base text-muted-foreground">Your intelligent accessibility companion</p>
+        
+        {/* Startup Accessibility Voice Orchestrator Layer */}
+        <AccessibilityStartupFlow
+          onFlowComplete={() => {
+            const onboarded = useAccessibilityStore.getState().onboarded;
+            void navigate({ to: onboarded ? "/home" : "/onboarding/intro" });
+          }}
+        />
+
+        <div className="mt-6 h-2 w-60 overflow-hidden rounded-chip bg-primary-tint" aria-label="Loading INAI">
           <motion.div className="h-full rounded-chip bg-primary" initial={{ width: "8%" }} animate={{ width: "100%" }} transition={{ duration: reducedMotion ? 0 : 2.2, ease: "easeOut" }} />
         </div>
-        <p className="mt-4 text-sm text-muted-foreground">Building a more inclusive tomorrow…</p>
+        <p className="mt-3 text-xs text-muted-foreground">Building a more inclusive tomorrow…</p>
       </div>
       {footer}
     </AppShell>
