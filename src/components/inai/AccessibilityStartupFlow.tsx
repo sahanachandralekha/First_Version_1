@@ -15,7 +15,6 @@ import {
 } from "@/lib/inai/voice-accessibility";
 import { useINAIAudio } from "@/audio/useINAIAudio";
 import { useShakeToActivate } from "@/motion/useShakeToActivate";
-import { VoiceActivationCard } from "@/components/inai/VoiceActivationCard";
 
 export type StartupFlowState =
   | "INITIALIZING"
@@ -591,14 +590,6 @@ export function AccessibilityStartupFlow({ onFlowComplete }: AccessibilityStartu
             exit={{ opacity: 0, y: -10 }}
             className="mt-6 rounded-card border-2 border-primary/40 bg-card p-5 text-center shadow-lg"
           >
-            {/* Audio initialization card if voice is not yet unlocked in WebView / Appilix */}
-            {!isUnlocked && (
-              <VoiceActivationCard
-                onActivated={() => void handleVoiceActivated("button")}
-                className="mb-5 text-left border-primary/30 shadow-none bg-primary/5"
-              />
-            )}
-
             <div className="flex items-center justify-center gap-2.5">
               <INAIAvatar
                 state={audioStatus === "speaking" ? "speaking" : audioStatus === "listening" ? "listening" : "idle"}
