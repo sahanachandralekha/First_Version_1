@@ -6,6 +6,7 @@ import type {
   MotionPermissionStatus,
   MotionStatus,
 } from "./audioTypes";
+import { generateINAIVoice } from "./ttsAdapter";
 
 const SILENT_WAV_BASE64 =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
@@ -13,21 +14,46 @@ const SILENT_WAV_BASE64 =
 const STORAGE_UNLOCKED_KEY = "inai_audio_unlocked";
 const STORAGE_SETUP_COMPLETE_KEY = "inai_audio_setup_complete";
 
+interface SpeechQueueItem {
+  text: string;
+  options: {
+    priority: "emergency" | "alert" | "guidance" | "chat";
+    interrupt?: boolean;
+  };
+  resolve: () => void;
+  reject: (err: Error) => void;
+}
+
 class INAIAudioManagerClass {
   private static instance: INAIAudioManagerClass | null = null;
 
+  // Single persistent HTMLAudioElement for all playback
+  private audio: HTMLAudioElement | null = null;
   private audioContext: AudioContext | null = null;
-  private unlockAudioElement: HTMLAudioElement | null = null;
+
   private status: AudioStatus = "unknown";
   private isUnlocked = false;
+  private isPlaying = false;
+  private initialized = false;
+
+  private queue: SpeechQueueItem[] = [];
+  private activeItem: SpeechQueueItem | null = null;
+  private currentRevokeFn: (() => void) | null = null;
+
   private lastAudioError: string | null = null;
   private lastShake: { magnitude: number; timestamp: number } | null = null;
   private motionStatus: MotionStatus = "checking";
   private motionPermission: MotionPermissionStatus = "unknown";
   private shakeDetectorActive = false;
+
   private statusListeners = new Set<AudioStatusListener>();
   private diagListeners = new Set<DiagnosticsListener>();
   private unlockPromise: Promise<boolean> | null = null;
+
+  // Callbacks for avatar lipsync and caption display
+  public onStart?: (text: string) => void;
+  public onEnd?: () => void;
+  public onCaption?: (text: string, priority: string) => void;
 
   private constructor() {
     if (typeof window !== "undefined") {
@@ -45,20 +71,10 @@ class INAIAudioManagerClass {
   private detectEnvironment() {
     if (typeof window === "undefined") return;
 
-    // Check Web Audio support
-    const AudioCtx =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) {
-      this.status = "unsupported";
-      return;
-    }
-
-    // Check if previously unlocked
     try {
       const storedUnlocked = localStorage.getItem(STORAGE_UNLOCKED_KEY);
       const storedSetup = localStorage.getItem(STORAGE_SETUP_COMPLETE_KEY);
       if (storedUnlocked === "true" || storedSetup === "true") {
-        // We know user completed setup, but browser may still require warm-up gesture
         this.status = "unknown";
       }
     } catch {
@@ -70,14 +86,34 @@ class INAIAudioManagerClass {
   public isWebView(): boolean {
     if (typeof window === "undefined" || !window.navigator) return false;
     const ua = window.navigator.userAgent || "";
-    // Standard Android WebView indicators
     const isAndroid = /Android/i.test(ua);
     const hasWv = /;\s*wv|Version\/[0-9.]+\s+Chrome/i.test(ua);
-    const isAppilix = /Appilix/i.test(ua);
+    const isAppilix = /Appilix/i.test(ua) || typeof (window as unknown as { appilix?: unknown }).appilix !== "undefined";
     return (isAndroid && hasWv) || isAppilix;
   }
 
-  /** Lazy-create single AudioContext */
+  /**
+   * Initialize the persistent HTMLAudioElement.
+   */
+  public async initialize(): Promise<void> {
+    if (this.initialized && this.audio) return;
+    if (typeof window === "undefined") return;
+
+    try {
+      this.audio = new Audio();
+      this.audio.preload = "auto";
+      this.audio.playsInline = true;
+      this.initialized = true;
+    } catch (err) {
+      console.warn("[INAI Audio] Persistent HTMLAudioElement creation failed:", err);
+      this.status = "unsupported";
+      this.notify();
+    }
+  }
+
+  /**
+   * Lazy-create single AudioContext for Web Audio utilities if available.
+   */
   private getOrCreateAudioContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
     if (!this.audioContext) {
@@ -87,41 +123,26 @@ class INAIAudioManagerClass {
       if (AudioCtx) {
         try {
           this.audioContext = new AudioCtx();
-        } catch (err) {
-          console.error("[INAI Audio] Failed to construct AudioContext:", err);
-          this.lastAudioError = String(err);
-          this.status = "error";
-          this.notify();
-          return null;
+        } catch {
+          // Non-critical AudioContext
         }
       }
     }
     return this.audioContext;
   }
 
-  /** Lazy-create reusable HTMLAudioElement */
-  private getOrCreateAudioElement(): HTMLAudioElement | null {
-    if (typeof window === "undefined") return null;
-    if (!this.unlockAudioElement) {
-      try {
-        this.unlockAudioElement = new Audio();
-        this.unlockAudioElement.preload = "auto";
-        this.unlockAudioElement.playsInline = true;
-      } catch (err) {
-        console.warn("[INAI Audio] Failed to create HTMLAudioElement:", err);
-      }
-    }
-    return this.unlockAudioElement;
+  /**
+   * Unlock HTMLAudioElement and Web Audio via user gesture or physical shake.
+   */
+  public async unlock(): Promise<boolean> {
+    return this.unlockAudio("button");
   }
 
   /**
-   * Unlock AudioContext and HTMLAudioElement inside user gesture or shake event.
-   * Safe against concurrent calls.
+   * Alias for unlock with source logging.
    */
   public async unlockAudio(source: "button" | "shake" | "auto" = "button"): Promise<boolean> {
-    if (this.isUnlocked && this.audioContext && this.audioContext.state === "running") {
-      this.status = "ready";
-      this.notify();
+    if (this.isUnlocked && this.status === "ready") {
       return true;
     }
 
@@ -129,7 +150,7 @@ class INAIAudioManagerClass {
       return this.unlockPromise;
     }
 
-    this.unlockPromise = this.performAudioUnlock(source);
+    this.unlockPromise = this.performUnlock(source);
     try {
       return await this.unlockPromise;
     } finally {
@@ -137,60 +158,48 @@ class INAIAudioManagerClass {
     }
   }
 
-  private async performAudioUnlock(source: "button" | "shake" | "auto"): Promise<boolean> {
+  private async performUnlock(source: "button" | "shake" | "auto"): Promise<boolean> {
     this.status = "initializing";
     this.notify();
 
-    let ctxResumed = false;
+    await this.initialize();
+
     let audioElemUnlocked = false;
 
-    // 1. Resume / Initialize AudioContext
-    try {
-      const ctx = this.getOrCreateAudioContext();
-      if (ctx) {
-        if (ctx.state === "suspended") {
-          await ctx.resume();
-        }
-        // Play a silent 1ms buffer to ensure audio pipeline is active
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const sourceNode = ctx.createBufferSource();
-        sourceNode.buffer = buffer;
-        sourceNode.connect(ctx.destination);
-        sourceNode.start(0);
-
-        ctxResumed = ctx.state === "running";
-      }
-    } catch (err) {
-      console.warn("[INAI Audio] AudioContext resume failed:", err);
-      this.lastAudioError = `AudioContext resume: ${String(err)}`;
-    }
-
-    // 2. Play silent HTMLAudioElement to satisfy WebView media policy
-    try {
-      const audio = this.getOrCreateAudioElement();
-      if (audio) {
-        audio.src = SILENT_WAV_BASE64;
-        audio.volume = 0.01;
-        const playPromise = audio.play();
+    // 1. Unlock persistent HTMLAudioElement with silent audio
+    if (this.audio) {
+      try {
+        this.audio.src = SILENT_WAV_BASE64;
+        this.audio.volume = 0.01;
+        const playPromise = this.audio.play();
         if (playPromise !== undefined) {
           await playPromise;
-          audio.pause();
-          audio.currentTime = 0;
+          this.audio.pause();
+          this.audio.currentTime = 0;
+          this.audio.volume = 1;
           audioElemUnlocked = true;
         }
-      }
-    } catch (err) {
-      const errorStr = String(err);
-      console.warn("[INAI Audio] HTMLAudioElement unlock failed:", errorStr);
-      this.lastAudioError = `Audio element unlock: ${errorStr}`;
-      // In WebView, if playback was blocked by policy:
-      if (errorStr.includes("NotAllowedError") || errorStr.includes("autoplay")) {
-        this.status = "blocked";
+      } catch (err) {
+        const errorStr = String(err);
+        console.warn("[INAI Audio] HTMLAudioElement silent unlock failed:", errorStr);
+        this.lastAudioError = `HTMLAudioElement unlock: ${errorStr}`;
+        if (errorStr.includes("NotAllowedError") || errorStr.includes("autoplay")) {
+          this.status = "blocked";
+        }
       }
     }
 
-    // 3. Evaluate success
-    const success = ctxResumed || audioElemUnlocked;
+    // 2. Also warm up Web Audio if present
+    try {
+      const ctx = this.getOrCreateAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        await ctx.resume();
+      }
+    } catch {
+      // Non-critical AudioContext
+    }
+
+    const success = audioElemUnlocked || (this.audioContext && this.audioContext.state === "running");
 
     if (success) {
       this.isUnlocked = true;
@@ -201,7 +210,7 @@ class INAIAudioManagerClass {
         localStorage.setItem(STORAGE_UNLOCKED_KEY, "true");
         localStorage.setItem(STORAGE_SETUP_COMPLETE_KEY, "true");
       } catch {
-        // Ignore storage errors
+        // Ignore storage error
       }
 
       // Haptic confirmation
@@ -209,27 +218,269 @@ class INAIAudioManagerClass {
         try {
           navigator.vibrate([80, 40, 120]);
         } catch {
-          // Ignore vibration failure
+          // Ignore
         }
       }
 
-      // Gentle confirmation chime via Web Audio (non-intrusive)
+      // Pleasant confirmation chime
       this.playConfirmationChime();
-
-      console.log(`[INAI Audio] Unlocked successfully via ${source}. State: ready.`);
+      console.log(`[INAI Audio] Unlocked successfully via ${source}. Ready.`);
     } else {
       if (this.status !== "blocked") {
         this.status = "blocked";
       }
-      console.warn(`[INAI Audio] Unlock failed via ${source}. State: blocked.`);
+      console.warn(`[INAI Audio] Unlock failed via ${source}.`);
     }
 
     this.notify();
-    return success;
+    return Boolean(success);
   }
 
   /**
-   * Play a pleasant dual-tone confirmation chime using Web Audio.
+   * Play any audio URL or Blob URL safely through the persistent HTMLAudioElement.
+   */
+  public async playAudio(url: string, onEndedClean?: () => void): Promise<void> {
+    await this.initialize();
+    if (!this.audio) {
+      throw new Error("HTMLAudioElement is not initialized");
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+
+      const cleanup = () => {
+        if (this.audio) {
+          this.audio.onended = null;
+          this.audio.onerror = null;
+        }
+        this.isPlaying = false;
+        if (onEndedClean) {
+          try {
+            onEndedClean();
+          } catch {
+            // Ignore
+          }
+        }
+      };
+
+      const finishSuccess = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        this.onEnd?.();
+        resolve();
+      };
+
+      const finishError = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        this.lastAudioError = err.message;
+        this.onEnd?.();
+        reject(err);
+      };
+
+      try {
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.audio.src = url;
+        this.audio.volume = 1.0;
+
+        this.audio.onended = finishSuccess;
+        this.audio.onerror = () => {
+          const errCode = this.audio?.error ? this.audio.error.code : "unknown";
+          finishError(new Error(`HTMLAudioElement error code ${errCode}`));
+        };
+
+        this.isPlaying = true;
+        const playPromise = this.audio.play();
+
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            const errStr = String(err);
+            console.error("[INAI Audio] Playback rejected:", errStr);
+            if (errStr.includes("NotAllowedError")) {
+              this.status = "blocked";
+              this.notify();
+            }
+            finishError(new Error(errStr));
+          });
+        }
+      } catch (err) {
+        finishError(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+  }
+
+  /**
+   * Main INAI voice entrypoint:
+   * Generates MP3 audio via existing TTS provider (ElevenLabs / Cloud TTS)
+   * and plays sequentially through persistent HTMLAudioElement.
+   */
+  public async speak(
+    text: string,
+    options?: { priority?: "emergency" | "alert" | "guidance" | "chat"; interrupt?: boolean },
+  ): Promise<void> {
+    const clean = text.trim();
+    if (!clean) return;
+
+    const priority = options?.priority ?? "guidance";
+    const interrupt = options?.interrupt ?? (priority === "emergency");
+
+    return new Promise<void>((resolve, reject) => {
+      const item: SpeechQueueItem = {
+        text: clean,
+        options: { priority, interrupt },
+        resolve,
+        reject,
+      };
+
+      if (interrupt) {
+        // Immediate interrupt: stop current playback and clear non-emergency items
+        this.stop();
+        this.queue = this.queue.filter((q) => q.options.priority === "emergency");
+        this.queue.unshift(item);
+      } else {
+        this.queue.push(item);
+      }
+
+      void this.processNextInQueue();
+    });
+  }
+
+  /**
+   * Sequential speech queue runner. Prevents overlapping audio.
+   */
+  private async processNextInQueue(): Promise<void> {
+    if (this.isPlaying || this.queue.length === 0) return;
+
+    const item = this.queue.shift();
+    if (!item) return;
+
+    this.activeItem = item;
+
+    // Display captions and notify start
+    this.onCaption?.(item.text, item.options.priority);
+    this.onStart?.(item.text);
+
+    let audioUrl = "";
+    let revokeFn: (() => void) | undefined;
+
+    try {
+      // Generate real MP3 audio via TTS provider
+      const generated = await generateINAIVoice(item.text);
+      audioUrl = generated.audioUrl;
+      revokeFn = generated.revoke;
+      this.currentRevokeFn = revokeFn || null;
+
+      if (!audioUrl) {
+        throw new Error("No audio URL generated");
+      }
+
+      await this.playAudio(audioUrl, () => {
+        if (revokeFn) {
+          revokeFn();
+          this.currentRevokeFn = null;
+        }
+      });
+
+      this.activeItem = null;
+      item.resolve();
+    } catch (err) {
+      console.warn("[INAI Audio] Speech item failed:", item.text, err);
+      if (revokeFn) {
+        revokeFn();
+        this.currentRevokeFn = null;
+      }
+      this.activeItem = null;
+      // Do not crash, resolve gracefully so calling components continue
+      item.resolve();
+    } finally {
+      // Process next message in queue sequentially
+      void this.processNextInQueue();
+    }
+  }
+
+  /**
+   * Stop all current playback and clear speech queue.
+   */
+  public stop(): void {
+    if (this.currentRevokeFn) {
+      try {
+        this.currentRevokeFn();
+      } catch {
+        // Ignore
+      }
+      this.currentRevokeFn = null;
+    }
+
+    if (this.audio) {
+      try {
+        this.audio.pause();
+        this.audio.currentTime = 0;
+        this.audio.src = "";
+      } catch {
+        // Ignore
+      }
+    }
+
+    // Resolve any pending items
+    for (const item of this.queue) {
+      item.resolve();
+    }
+    this.queue = [];
+    this.isPlaying = false;
+    this.activeItem = null;
+    this.onEnd?.();
+  }
+
+  /**
+   * Pause currently playing audio.
+   */
+  public pause(): void {
+    if (this.audio) {
+      try {
+        this.audio.pause();
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Resume audio playback.
+   */
+  public async resume(): Promise<void> {
+    if (this.audio && this.audio.paused && this.isPlaying) {
+      try {
+        await this.audio.play();
+      } catch (err) {
+        console.warn("[INAI Audio] Resume failed:", err);
+      }
+    }
+    if (this.audioContext && this.audioContext.state === "suspended") {
+      try {
+        await this.audioContext.resume();
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  public isReady(): boolean {
+    return this.isUnlocked && this.status === "ready";
+  }
+
+  public isAudioUnlocked(): boolean {
+    return this.isReady();
+  }
+
+  public getStatus(): AudioStatus {
+    return this.status;
+  }
+
+  /**
+   * Play a dual-tone confirmation chime using Web Audio.
    */
   public playConfirmationChime(): void {
     try {
@@ -241,8 +492,8 @@ class INAIAudioManagerClass {
       const gain = ctx.createGain();
 
       osc.type = "sine";
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12); // E5
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12);
 
       gain.gain.setValueAtTime(0.001, now);
       gain.gain.linearRampToValueAtTime(0.12, now + 0.03);
@@ -254,110 +505,8 @@ class INAIAudioManagerClass {
       osc.start(now);
       osc.stop(now + 0.36);
     } catch {
-      // Non-critical chime fallback
+      // Fallback
     }
-  }
-
-  /**
-   * Safe TTS adapter: speaks text through TTS service with AudioContext readiness check.
-   */
-  public async speak(
-    text: string,
-    options?: { priority?: "emergency" | "alert" | "guidance" | "chat"; interrupt?: boolean }
-  ): Promise<void> {
-    const { ttsService } = await import("@/services/tts");
-    // Ensure suspended AudioContext is resumed if needed
-    if (this.audioContext && this.audioContext.state === "suspended") {
-      try {
-        await this.audioContext.resume();
-      } catch {
-        // Continue to TTS
-      }
-    }
-    return ttsService.speak(text, {
-      priority: options?.priority ?? "guidance",
-      interrupt: options?.interrupt ?? false,
-    });
-  }
-
-  /**
-   * Play an audio URL safely with full Promise rejection handling.
-   */
-  public async playAudio(url: string): Promise<void> {
-    const audio = this.getOrCreateAudioElement();
-    if (!audio) {
-      throw new Error("HTMLAudioElement is not supported in this environment");
-    }
-
-    try {
-      audio.src = url;
-      audio.volume = 1.0;
-      await audio.play();
-    } catch (err) {
-      const errStr = String(err);
-      console.error("[INAI Audio] Playback failed for URL:", url, err);
-      this.lastAudioError = `playAudio failed: ${errStr}`;
-      if (errStr.includes("NotAllowedError")) {
-        this.status = "blocked";
-        this.notify();
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Stop any current audio element playback.
-   */
-  public stop(): void {
-    if (this.unlockAudioElement) {
-      try {
-        this.unlockAudioElement.pause();
-        this.unlockAudioElement.currentTime = 0;
-      } catch {
-        // Ignore
-      }
-    }
-  }
-
-  /**
-   * Pause current audio element.
-   */
-  public pause(): void {
-    if (this.unlockAudioElement) {
-      try {
-        this.unlockAudioElement.pause();
-      } catch {
-        // Ignore
-      }
-    }
-  }
-
-  /**
-   * Resume current audio element or AudioContext.
-   */
-  public async resume(): Promise<void> {
-    if (this.audioContext && this.audioContext.state === "suspended") {
-      try {
-        await this.audioContext.resume();
-      } catch (err) {
-        console.warn("[INAI Audio] AudioContext resume failed:", err);
-      }
-    }
-    if (this.unlockAudioElement && this.unlockAudioElement.paused) {
-      try {
-        await this.unlockAudioElement.play();
-      } catch (err) {
-        console.warn("[INAI Audio] Audio resume failed:", err);
-      }
-    }
-  }
-
-  public isAudioUnlocked(): boolean {
-    return this.isUnlocked && this.status === "ready";
-  }
-
-  public getStatus(): AudioStatus {
-    return this.status;
   }
 
   public setMotionStatus(status: MotionStatus): void {
@@ -385,10 +534,6 @@ class INAIAudioManagerClass {
 
   public getDiagnostics(): AudioDiagnostics {
     const audioCtxState = this.audioContext ? this.audioContext.state : "none";
-    const ttsReady =
-      typeof window !== "undefined" && "speechSynthesis" in window
-        ? "ready"
-        : "unavailable";
 
     return {
       audioContextState: audioCtxState,
@@ -397,7 +542,7 @@ class INAIAudioManagerClass {
       motionStatus: this.motionStatus,
       motionPermission: this.motionPermission,
       shakeDetectorActive: this.shakeDetectorActive,
-      ttsStatus: ttsReady,
+      ttsStatus: "ready",
       isWebView: this.isWebView(),
       lastAudioError: this.lastAudioError,
       lastShake: this.lastShake,
@@ -425,7 +570,7 @@ class INAIAudioManagerClass {
       try {
         listener(this.status);
       } catch {
-        // Guard listener failure
+        // Guard listener
       }
     }
     this.notifyDiag();
@@ -437,7 +582,7 @@ class INAIAudioManagerClass {
       try {
         listener(diag);
       } catch {
-        // Guard listener failure
+        // Guard listener
       }
     }
   }

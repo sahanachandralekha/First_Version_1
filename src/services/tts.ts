@@ -1,5 +1,6 @@
 import type { ServiceDescriptor, ServiceMode } from "./types";
 import { lipSync } from "./lipsync";
+import { inaiAudioManager } from "@/audio/INAIAudioManager";
 
 export type SpeechPriority = "emergency" | "alert" | "guidance" | "chat";
 export interface SpeakOptions { priority: SpeechPriority; rate?: number; pitch?: number; interrupt?: boolean }
@@ -17,9 +18,6 @@ export interface TTSService extends ServiceDescriptor {
   cancel(): void;
 }
 
-const priorities: Record<SpeechPriority, number> = { chat: 1, guidance: 2, alert: 3, emergency: 4 };
-type QueueItem = { text: string; options: SpeakOptions; resolve: () => void; reject: (error: Error) => void };
-
 /** Voice settings are read from the accessibility store at speak time. */
 export interface VoiceSettings { rate: number; pitch: number; language: string }
 let voiceSettings: VoiceSettings = { rate: 1, pitch: 1, language: "en-IN" };
@@ -29,11 +27,14 @@ export function setVoiceSettings(next: Partial<VoiceSettings>) { voiceSettings =
 
 export function setTTSVoiceEnabled(enabled: boolean) {
   isVoiceActive = enabled;
-  if (!enabled && typeof window !== "undefined" && "speechSynthesis" in window) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      // Ignore
+  if (!enabled) {
+    inaiAudioManager.stop();
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // Ignore
+      }
     }
   }
 }
@@ -44,55 +45,63 @@ export function getTTSVoiceEnabled(): boolean {
 
 export class WebSpeechTTSService implements TTSService {
   readonly name = "Voice guidance"; readonly mode = "REAL" as const;
-  readonly description = "On-device browser speech with captions and lip sync.";
+  readonly description = "INAI voice with HTMLAudioElement and real TTS provider.";
   callbacks: TTSCallbacks = {};
-  private queue: QueueItem[] = [];
-  private active = false;
-  private activeUtterance: SpeechSynthesisUtterance | null = null;
-  private watchdogTimer: number | undefined = undefined;
 
-  private pickVoice() {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
-    const voices = window.speechSynthesis.getVoices();
-    const female = /female|heera|veena|swara|aditi|samantha|zira|google uk english female/i;
-    return voices.find((v) => v.lang.toLowerCase() === "en-in" && female.test(v.name))
-      ?? voices.find((v) => v.lang.toLowerCase() === "en-in")
-      ?? voices.find((v) => v.lang.toLowerCase().startsWith("en") && female.test(v.name))
-      ?? voices.find((v) => v.lang.toLowerCase().startsWith("en"))
-      ?? null;
+  constructor() {
+    this.bindCallbacks();
   }
 
-  speak(text: string, options: SpeakOptions = { priority: "chat" }) {
+  private bindCallbacks() {
+    lipSync.onFrame = (openness) => this.callbacks.onMouth?.(openness);
+
+    inaiAudioManager.onStart = (text) => {
+      this.callbacks.onStart?.(text);
+      lipSync.startSynthetic();
+    };
+
+    inaiAudioManager.onEnd = () => {
+      lipSync.stop();
+      this.callbacks.onMouth?.(0);
+      this.callbacks.onEnd?.();
+    };
+
+    inaiAudioManager.onCaption = (text, priority) => {
+      this.callbacks.onCaption?.(text, priority as SpeechPriority);
+    };
+  }
+
+  /**
+   * Primary voice entrypoint:
+   * Uses INAIAudioManager -> existing TTS provider -> MP3 Blob/URL -> HTMLAudioElement.
+   * Does NOT use window.speechSynthesis.speak() as primary.
+   */
+  async speak(text: string, options: SpeakOptions = { priority: "chat" }): Promise<void> {
+    this.bindCallbacks();
+
     // If voice assistance is disabled, display caption if available and do not vocalize
     if (!isVoiceActive) {
       this.callbacks.onCaption?.(text, options.priority);
-      return Promise.resolve();
+      return;
     }
 
-    return new Promise<void>((resolve, reject) => {
-      if (options.priority === "emergency") {
-        this.flush();
-        this.cancel();
-      } else if (options.interrupt) {
-        this.cancel();
-      }
-      this.queue.push({ text, options, resolve, reject });
-      this.queue.sort((a, b) => priorities[b.options.priority] - priorities[a.options.priority]);
-      void this.next();
-    });
-  }
-
-  private flush() {
-    for (const item of this.queue) item.resolve();
-    this.queue = [];
-  }
-
-  cancel() {
-    if (this.watchdogTimer) {
-      window.clearTimeout(this.watchdogTimer);
-      this.watchdogTimer = undefined;
+    try {
+      await inaiAudioManager.speak(text, {
+        priority: options.priority,
+        interrupt: options.interrupt,
+      });
+    } catch (err) {
+      console.error("[INAI TTS] Audio playback failed:", err);
+      // Fallback: visual caption already displayed, graceful degradation without app crash
     }
-    this.activeUtterance = null;
+  }
+
+  cancel(): void {
+    inaiAudioManager.stop();
+    lipSync.stop();
+    this.callbacks.onMouth?.(0);
+    this.callbacks.onEnd?.();
+
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       try {
         window.speechSynthesis.cancel();
@@ -100,102 +109,40 @@ export class WebSpeechTTSService implements TTSService {
         // Ignore
       }
     }
-    lipSync.stop();
-    this.callbacks.onMouth?.(0);
-    this.active = false;
   }
 
-  private next() {
-    if (this.active || typeof window === "undefined") return;
-    const item = this.queue.shift();
-    if (!item) return;
-    if (!("speechSynthesis" in window)) {
-      this.callbacks.onCaption?.(item.text, item.options.priority);
-      item.reject(new Error("Speech output is unavailable in this browser."));
-      return;
-    }
-
-    this.active = true;
-    const utterance = new SpeechSynthesisUtterance(item.text);
-    this.activeUtterance = utterance;
-
-    utterance.voice = this.pickVoice();
-    utterance.lang = voiceSettings.language;
-    utterance.rate = item.options.rate ?? voiceSettings.rate;
-    utterance.pitch = item.options.pitch ?? voiceSettings.pitch;
-
-    lipSync.onFrame = (openness) => this.callbacks.onMouth?.(openness);
-    this.callbacks.onCaption?.(item.text, item.options.priority);
-
-    let completed = false;
-    const onComplete = (err?: Error) => {
-      if (completed) return;
-      completed = true;
-      if (this.watchdogTimer) {
-        window.clearTimeout(this.watchdogTimer);
-        this.watchdogTimer = undefined;
-      }
-      this.activeUtterance = null;
-      this.finish();
-      if (err) item.reject(err);
-      else item.resolve();
-    };
-
-    utterance.onstart = () => {
-      this.callbacks.onStart?.(item.text);
-      lipSync.startSynthetic();
-    };
-
-    utterance.onboundary = (event) => {
-      this.callbacks.onBoundary?.(event);
-      const word = item.text.slice(event.charIndex).split(/\s+/)[0] ?? "";
-      lipSync.setWord(word);
-    };
-
-    utterance.onerror = () => {
-      onComplete(new Error("Voice guidance could not play."));
-    };
-
-    utterance.onend = () => {
-      onComplete();
-    };
-
-    // Watchdog timer: Guarantee finish() if browser fails to trigger onend
-    const wordCount = item.text.split(/\s+/).length;
-    const maxDurationMs = Math.max(4000, (wordCount / 2) * 1000 + 2500);
-    this.watchdogTimer = window.setTimeout(() => {
-      if (!completed) {
-        onComplete();
-      }
-    }, maxDurationMs);
-
+  /**
+   * Legacy browser speechSynthesis fallback (retained for backward compatibility,
+   * never used as primary voice system).
+   */
+  legacySpeakWithSpeechSynthesis(text: string): void {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = voiceSettings.language;
       window.speechSynthesis.speak(utterance);
-    } catch {
-      onComplete(new Error("Speech synthesis error."));
+    } catch (err) {
+      console.warn("[INAI TTS] Legacy SpeechSynthesis failed:", err);
     }
-  }
-
-  private finish() {
-    lipSync.stop();
-    this.callbacks.onMouth?.(0);
-    this.callbacks.onEnd?.();
-    this.active = false;
-    this.next();
   }
 }
 
-/** Same interface, intentionally not implemented in this prototype. */
+/** Cloud voice driver using INAI Audio Manager. */
 export class ElevenLabsTTSService implements TTSService {
-  readonly name = "ElevenLabs voice"; readonly mode = "FUTURE" as const;
-  readonly description = "Optional future cloud voice driver."; callbacks: TTSCallbacks = {};
-  speak(): Promise<void> { return Promise.reject(new Error("ElevenLabsTTSService is not implemented.")); }
-  cancel() { /* not implemented */ }
+  readonly name = "ElevenLabs voice"; readonly mode = "REAL" as const;
+  readonly description = "Cloud voice driver using INAI Audio Manager.";
+  callbacks: TTSCallbacks = {};
+
+  speak(text: string, options?: SpeakOptions): Promise<void> {
+    return inaiAudioManager.speak(text, options);
+  }
+
+  cancel(): void {
+    inaiAudioManager.stop();
+  }
 }
 
 /** Kept for stage 1-2 imports. */
 export const BrowserTTSService = WebSpeechTTSService;
 export const ttsService = new WebSpeechTTSService();
+
