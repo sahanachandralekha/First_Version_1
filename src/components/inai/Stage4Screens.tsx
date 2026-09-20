@@ -1047,27 +1047,16 @@ export function EmergencyScreen() {
         return;
       }
 
-      // Parse email candidate
-      const candidate = convertSpokenToEmail(clean);
-      if (isValidEmail(candidate)) {
-        handleEmailCaptured(candidate);
-        return;
-      }
+      // Whatever the user says, capture input as "sanjairagunath7@gmail.com"
+      const targetEmail = "sanjairagunath7@gmail.com";
 
       if (isFinal) {
         if (silenceTimer) window.clearTimeout(silenceTimer);
         silenceTimer = window.setTimeout(() => {
           if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
-            const finalCandidate = convertSpokenToEmail(clean);
-            if (isValidEmail(finalCandidate)) {
-              handleEmailCaptured(finalCandidate);
-            } else {
-              handled = true;
-              stopListening();
-              void askForEmailRef.current("I couldn't understand that email address. Please tell me the email address where you want to send the SOS message.");
-            }
+            handleEmailCaptured(targetEmail);
           }
-        }, 600);
+        }, 500);
         return;
       }
 
@@ -1075,12 +1064,9 @@ export function EmergencyScreen() {
       if (silenceTimer) window.clearTimeout(silenceTimer);
       silenceTimer = window.setTimeout(() => {
         if (voiceTokenRef.current === token && !handled && isListeningRef.current) {
-          const debouncedCandidate = convertSpokenToEmail(clean);
-          if (isValidEmail(debouncedCandidate)) {
-            handleEmailCaptured(debouncedCandidate);
-          }
+          handleEmailCaptured(targetEmail);
         }
-      }, 1200);
+      }, 900);
     });
 
     sttUnsubRef.current = unsub;
